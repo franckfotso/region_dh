@@ -6,7 +6,7 @@
 # Licensed under MIT License
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # usage: python tools/train_net.py --gpu_id 0 --dataset voc_2007 \
-#        --gt_set train --net AlexNet \
+#        --gt_set train_val --net AlexNet \
 #        --iters 40000 --cache_im_dir cache/voc2007_train
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -20,6 +20,7 @@ import tensorflow as tf
 from Config import Config
 from datasets.Pascal import Pascal
 from main.Trainer import Trainer
+from models.nets.AlexNet import AlexNet
 
 def parse_args():
     # construct the argument parse and parse the arguments
@@ -59,6 +60,7 @@ if __name__ == '__main__':
     cfg = _C.cfg
     
     cfg.MAIN_DEFAULT_GPU_ID = args['gpu_id']
+    cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = args['net']+"_"+args['techno']
     
     print('Using config:')
     pprint.pprint(cfg)
@@ -89,17 +91,36 @@ if __name__ == '__main__':
     print ('[INFO] dataset.test: {}'.format(dataset.sets["test"]["num_items"]))
     print ('[INFO] dataset.val: {}'.format(dataset.sets["val"]["num_items"]))
     
-    images = dataset.load_gt_rois(gt_set=gt_set)
-    print ('[INFO] images.num: {}'.format(len(images)))
+    if gt_set == "train_val":
+        train_images = dataset.load_gt_rois(gt_set="train")
+        val_images = dataset.load_gt_rois(gt_set="val")
+        print ('[INFO] train_images.num: {}'.format(len(train_images)))
+        print ('[INFO] val_images.num: {}'.format(len(val_images)))        
+    else:
+        train_images = dataset.load_gt_rois(gt_set=gt_set)
+        print ('[INFO] train_images.num: {}'.format(len(train_images)))
     
     # tensorboard directory
-    tb_DIR = osp.join(cfg.MAIN_DIR_LOGS, args["dataset"])
+    tb_dir = osp.join(cfg.MAIN_DIR_LOGS, args["dataset"])
+        
+    net = None
+    weights = None # pretrained weights
+    if args['net'] == "AlexNet":
+        net = AlexNet()
+        weights = "models/pretrained/alexnet_weights.h5"
+        
+    assert weights != None, \
+    "[ERROR] invalid network provided. Found: {}".format(args["net"])
+    
+    model = {'net': net,'weights': weights}
+    trainer = Trainer(dataset=dataset, model=model, cfg=cfg)
     
     # launch train process
     root_dir = cfg.MAIN_DIR_ROOT
     output_dir = dataset.built_output_dir(root_dir, 'train')
     cache_im_dir = osp.join(root_dir, args['cache_im_dir'])
-    print ('[INFO] Start the training process on {}'.format(args["dataset"]))
     
+    print ('[INFO] Start the training process on {}'.format(args["dataset"]))
+    trainer.run(train_images, val_images, tb_dir, output_dir, techno, max_iters=args['iters'])    
     
     

@@ -8,8 +8,9 @@
 
 from main.BasicWorker import BasicWorker
 from main.SolverWrapper import SolverWrapper
-from datasets.SSDHGenerator import SSDHGenerator
+from datasets.IMGenerator import IMGenerator
 
+import tensorflow as tf
 
 class Trainer(BasicWorker):
     
@@ -21,34 +22,31 @@ class Trainer(BasicWorker):
         super(Trainer, self).__init__(dataset,
                  model,
                  cfg)
-        
-    def run(self, all_images, all_masks, 
-            cache_im_dir, output_dir, task, max_iters=40000):
+           
+    def run(self, train_images, val_images, tb_dir,
+            output_dir, techno, max_iters=40000):
         """ Train a CFM network """
         
-        assert task in self.cfg.MAIN_DEFAULT_TASKS, \
+        assert techno in self.cfg.MAIN_DEFAULT_TECHNOS, \
             '[ERROR] unknown task name provided: {}'.format(self.task)
             
-        if task == 'SSDH':            
-            data_gen = SSDHGenerator(images=all_images, masks=all_masks,
-                                    bbox_means=None, bbox_stds=None,
-                                    num_cls=self.dataset.num_cls, cfm_t=None,
-                                    in_gt_dir=None, in_pr_dir=None,
-                                    cache_im_dir=cache_im_dir, cfg=self.cfg)
+        if self.techno == 'SSDH':            
+            train_gen = IMGenerator(train_images, self.dataset.num_cls, self.cfg)
+            val_gen = IMGenerator(val_images, self.dataset.num_cls, self.cfg)
                                     
-        elif self.task == 'RegionDH':
+        elif self.techno == 'RegionDH':
             raise NotImplemented
         
-        elif self.task == 'ISDH':
-            raise NotImplemented            
+        elif self.techno == 'ISDH':
+            raise NotImplemented
         
-        sw = SolverWrapper(self.model['solver'], 
-                           self.model['pretrained_model'], 
-                           data_gen, output_dir, self.cfg)
-
-        print 'Solving...'
-        model_paths = sw.train_model(max_iters)
-        print 'done solving'
-        return model_paths
-    
+        tfconfig = tf.ConfigProto(allow_soft_placement=True)
+        tfconfig.gpu_options.allow_growth = True
+        
+        with tf.Session(config=tfconfig) as sess:
+            sw = SolverWrapper(self.model['net'], self.model['weights'],techno, self.dataset, 
+                   train_gen, val_gen, tb_dir, output_dir, self.cfg)
+            print('Solving...')
+            sw.train_model(sess, max_iters)
+            print('done solving')    
     

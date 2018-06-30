@@ -77,7 +77,7 @@ class Config(object):
             self.cfg.MAIN_DEFAULT_PIXEL_MEANS = self.load_param("MAIN.DEFAULT", "PIXEL_MEANS", "list", "float")
             self.cfg.MAIN_DEFAULT_EPS = self.load_param("MAIN.DEFAULT", "EPS", "float")
             self.cfg.MAIN_DEFAULT_BINARIZE_THRESH = self.load_param("MAIN.DEFAULT", "BINARIZE_THRESH","float")
-            self.cfg.MAIN_DEFAULT_TASKS = self.load_param("MAIN.DEFAULT", "TASKS","list")
+            self.cfg.MAIN_DEFAULT_TECHNOS = self.load_param("MAIN.DEFAULT", "TECHNOS","list")
             self.cfg.MAIN_DEFAULT_DATASETS = self.load_param("MAIN.DEFAULT", "DATASETS","list")
             ''' 
                 MAIN.DIR
@@ -111,6 +111,17 @@ class Config(object):
             ''' 
                 TRAIN.DEFAULT
             '''
+            self.cfg.TRAIN_DEFAULT_LEARNING_RATE = self.load_param("TRAIN.DEFAULT", "LEARNING_RATE","float")
+            self.cfg.TRAIN_DEFAULT_MOMENTUM = self.load_param("TRAIN.DEFAULT", "MOMENTUM","float")
+            self.cfg.TRAIN_DEFAULT_WEIGHT_DECAY = self.load_param("TRAIN.DEFAULT", "WEIGHT_DECAY","float")
+            self.cfg.TRAIN_DEFAULT_GAMMA = self.load_param("TRAIN.DEFAULT", "GAMMA","float")
+            self.cfg.TRAIN_DEFAULT_STEPSIZE = self.load_param("TRAIN.DEFAULT", "STEPSIZE", "list", "int")
+            self.cfg.TRAIN_DEFAULT_DOUBLE_BIAS = self.load_param("TRAIN.DEFAULT", "DOUBLE_BIAS","bool")
+            self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL = self.load_param("TRAIN.DEFAULT", "SUMMARY_INTERVAL","int")
+            self.cfg.TRAIN_DEFAULT_DISPLAY = self.load_param("TRAIN.DEFAULT", "DISPLAY","int")
+            self.cfg.TRAIN_DEFAULT_SNAPSHOT_KEPT = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_KEPT","int")
+            self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = self.load_param("PASCAL.DEFAULT", "SNAPSHOT_PREFIX")
+            
             self.cfg.TRAIN_DEFAULT_DEBUG = self.load_param("TRAIN.DEFAULT", "DEBUG", "bool")
             self.cfg.TRAIN_DEFAULT_USE_FLIPPED = self.load_param("TRAIN.DEFAULT", "USE_FLIPPED", "bool")
             self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_ITERS", "int")            
@@ -135,13 +146,19 @@ class Config(object):
             self.cfg.TRAIN_DEFAULT_ROI_BG_THRESH_LO = self.load_param("TRAIN.DEFAULT", "ROI_BG_THRESH_LO","float")    
 
             ''' 
-                TRAIN.BATCH
+                TRAIN.BATCH.CFC
             '''
-            self.cfg.TRAIN_BATCH_NUM_IMG = self.load_param("TRAIN.BATCH", "NUM_IMG", "int")
-            self.cfg.TRAIN_BATCH_NUM_ROI = self.load_param("TRAIN.BATCH", "NUM_ROI", "int")
-            self.cfg.TRAIN_BATCH_FRACTION_SAMPLE = self.load_param("TRAIN.BATCH", "FRACTION_SAMPLE", "list", "float")
-            self.cfg.TRAIN_BATCH_THRESH_LO_SAMPLE = self.load_param("TRAIN.BATCH", "THRESH_LO_SAMPLE", "list", "float")
-            self.cfg.TRAIN_BATCH_THRESH_HI_SAMPLE = self.load_param("TRAIN.BATCH", "THRESH_HI_SAMPLE", "list", "float")
+            self.cfg.TRAIN_BATCH_CFC_NUM_IMG = self.load_param("TRAIN.BATCH.CFC", "NUM_IMG", "int")
+            
+            ''' 
+                TRAIN.BATCH.DET
+            '''
+            self.cfg.TRAIN_BATCH_DET_NUM_IMG = self.load_param("TRAIN.BATCH.DET", "NUM_IMG", "int")
+            self.cfg.TRAIN_BATCH_DET_NUM_ROI = self.load_param("TRAIN.BATCH.DET", "NUM_ROI", "int")
+            self.cfg.TRAIN_BATCH_DET_FRACTION_SAMPLE = self.load_param("TRAIN.BATCH.DET", "FRACTION_SAMPLE", "list", "float")
+            self.cfg.TRAIN_BATCH_DET_THRESH_LO_SAMPLE = self.load_param("TRAIN.BATCH.DET", "THRESH_LO_SAMPLE", "list", "float")
+            self.cfg.TRAIN_BATCH_DET_THRESH_HI_SAMPLE = self.load_param("TRAIN.BATCH.DET", "THRESH_HI_SAMPLE", "list", "float")
+                        
             
             ''' 
                 TRAIN.LAYER 

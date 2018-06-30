@@ -1,12 +1,10 @@
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Project: Region-DH
-# Module: libs.datasets.SSDHGenerator
-# Copyright (c) 2018
-# Written by: Franck FOTSO
+# Project: segm_cfm
+# Module: libs.datasets.PascalGenerator
+# Copyright (c) 2017
+# Written by: Romuald FOTSO
 # Based on: py-faster-rcnn 
 #    (https://github.com/rbgirshick/py-faster-rcnn)
 # Licensed under MIT License
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 import scipy.io as sio
 import numpy.random as npr
@@ -14,7 +12,7 @@ from datasets.IMGenerator import IMGenerator
 from utils.regression import *
 from utils.transformation import *
 
-class SSDHGenerator(IMGenerator):
+class CFMGenerator(IMGenerator):
         
     def __init__(self, images, masks, num_cls, 
                  cfm_t, bbox_means, bbox_stds, 
@@ -32,7 +30,7 @@ class SSDHGenerator(IMGenerator):
         
         self._cur_idx, self._perm_ids = self.shuffe_images()
                 
-        super(SSDHGenerator, self).__init__()
+        super(CFMGenerator, self).__init__()
 
     def get_in_gt_dir(self):
         return self._in_gt_dir
