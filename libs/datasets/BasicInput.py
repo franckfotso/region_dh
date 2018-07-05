@@ -11,10 +11,24 @@ class BasicInput(object):
     def __init__(self, 
                  filename, 
                  pathname,
-                 im_RAW):
+                 im_RAW, 
+                 label=None):
         self._filename = filename
         self._pathname = pathname
         self._im_RAW = im_RAW
+        self._label = label
+
+    def get_label(self):
+        return self.__label
+
+
+    def set_label(self, value):
+        self.__label = value
+
+
+    def del_label(self):
+        del self.__label
+
         
     def get_filename(self):
         return self._filename
@@ -50,7 +64,9 @@ class BasicInput(object):
 
     def del_im_raw(self):
         del self._im_RAW
+        
 
     filename = property(get_filename, set_filename, del_filename, "filename's docstring")
     pathname = property(get_pathname, set_pathname, del_pathname, "pathname's docstring")
     im_RAW = property(get_im_raw, set_im_raw, del_im_raw, "im_RAW's docstring")
+    label = property(get_label, set_label, del_label, "label's docstring")

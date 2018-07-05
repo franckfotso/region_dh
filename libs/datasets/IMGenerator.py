@@ -11,15 +11,18 @@
 import scipy.io as sio
 import numpy as np
 import numpy.random as npr
-from utils.regression import *
-from utils.transformation import *
+
+import cv2
+
+#from utils.regression import *
+#from utils.transformation import *
 
 class IMGenerator(object):
         
-    def __init__(self, images, num_cls, cfg):
+    def __init__(self, images, dataset, cfg):
         self._images = images
         self._cfg = cfg
-        self.num_cls = num_cls
+        self.dataset = dataset
         
         self._cur_idx, self._perm_ids = self.shuffe_images()
 
@@ -79,12 +82,23 @@ class IMGenerator(object):
     def built_label_blob(self, images):
         num_images = len(images)
         
-        blob = np.zeros((num_images, self.num_cls), dtype=np.int32)
-        for im_i in range(num_images):
-            image = images[im_i]
-            gt_classes = image.gt_rois["gt_classes"]
-            classes = np.unique(gt_classes)
-            blob[im_i, classes] = 1
+        if self.dataset.name in ["voc_2007","voc_2012","nus_wide"]:
+            # multi-label data        
+            blob = np.zeros((num_images, self.dataset.num_cls), dtype=np.int32)
+            for im_i in range(num_images):
+                image = images[im_i]
+                gt_classes = image.gt_rois["gt_classes"]
+                classes = np.unique(gt_classes)
+                blob[im_i, classes] = 1
+                
+        elif self.dataset.name in ["cifar10", "cifar100"]:
+            # single-label data
+            blob = np.zeros((num_images, 1), dtype=np.int32)
+            for im_i in range(num_images):
+                image = images[im_i]
+                blob[im_i] = image.label
+        else:
+            raise NotImplemented
             
         return blob
             

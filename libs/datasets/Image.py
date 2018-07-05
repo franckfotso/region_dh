@@ -14,6 +14,7 @@ class Image(BasicInput):
                  filename, 
                  pathname,
                  im_RAW=None,
+                 label=None,
                  gt_rois=None,
                  pr_rois=None,
                  flipped=False
@@ -22,7 +23,7 @@ class Image(BasicInput):
         self._pr_rois = pr_rois
         self._flipped = flipped
         
-        super(Image, self).__init__(filename, pathname, im_RAW)
+        super(Image, self).__init__(filename, pathname, im_RAW, label)
 
     def get_flipped(self):
         return self.__flipped

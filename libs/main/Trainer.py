@@ -30,14 +30,14 @@ class Trainer(BasicWorker):
         assert techno in self.cfg.MAIN_DEFAULT_TECHNOS, \
             '[ERROR] unknown task name provided: {}'.format(self.task)
             
-        if self.techno == 'SSDH':            
-            train_gen = IMGenerator(train_images, self.dataset.num_cls, self.cfg)
-            val_gen = IMGenerator(val_images, self.dataset.num_cls, self.cfg)
+        if techno == 'SSDH':            
+            train_gen = IMGenerator(train_images, self.dataset, self.cfg)
+            val_gen = IMGenerator(val_images, self.dataset, self.cfg)
                                     
-        elif self.techno == 'RegionDH':
+        elif techno == 'RegionDH':
             raise NotImplemented
         
-        elif self.techno == 'ISDH':
+        elif techno == 'ISDH':
             raise NotImplemented
         
         tfconfig = tf.ConfigProto(allow_soft_placement=True)

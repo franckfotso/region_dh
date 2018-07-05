@@ -79,6 +79,7 @@ class Config(object):
             self.cfg.MAIN_DEFAULT_BINARIZE_THRESH = self.load_param("MAIN.DEFAULT", "BINARIZE_THRESH","float")
             self.cfg.MAIN_DEFAULT_TECHNOS = self.load_param("MAIN.DEFAULT", "TECHNOS","list")
             self.cfg.MAIN_DEFAULT_DATASETS = self.load_param("MAIN.DEFAULT", "DATASETS","list")
+            self.cfg.MAIN_DEFAULT_EXT = self.load_param("MAIN.DEFAULT", "EXT", "list")
             ''' 
                 MAIN.DIR
             '''
@@ -86,12 +87,8 @@ class Config(object):
             self.cfg.MAIN_DIR_CACHE = self.load_param("MAIN.DIR", "CACHE")
             self.cfg.MAIN_DIR_LOGS = self.load_param("MAIN.DIR", "LOGS")
             self.cfg.MAIN_DIR_OUTPUTS = self.load_param("MAIN.DIR", "OUTPUTS")
+           
             
-            
-            ''' 
-                PASCAL.DATASET.DEFAULT
-            '''
-            self.cfg.PASCAL_DATASET_DEFAULT_EXT = self.load_param("PASCAL.DATASET.DEFAULT", "EXT", "list")
             ''' 
                 PASCAL.DATASET.DIR
             '''
@@ -109,6 +106,20 @@ class Config(object):
             self.cfg.PASCAL_DATASET_FILE_CLS = self.load_param("PASCAL.DATASET.FILE", "CLS")
             
             ''' 
+                CIFAR10.DATASET.DIR
+            '''
+            self.cfg.CIFAR10_DATASET_DIR_TRAIN = self.load_param("CIFAR10.DATASET.DIR", "TRAIN")
+            self.cfg.CIFAR10_DATASET_DIR_VAL = self.load_param("CIFAR10.DATASET.DIR", "VAL")
+            
+            ''' 
+                CIFAR10.DATASET.FILE
+            '''
+            self.cfg.CIFAR10_DATASET_FILE_TRAIN = self.load_param("CIFAR10.DATASET.FILE", "TRAIN")
+            self.cfg.CIFAR10_DATASET_FILE_VAL = self.load_param("CIFAR10.DATASET.FILE", "VAL")
+            self.cfg.CIFAR10_DATASET_FILE_CLS = self.load_param("CIFAR10.DATASET.FILE", "CLS")
+            
+            
+            ''' 
                 TRAIN.DEFAULT
             '''
             self.cfg.TRAIN_DEFAULT_LEARNING_RATE = self.load_param("TRAIN.DEFAULT", "LEARNING_RATE","float")
@@ -120,11 +131,12 @@ class Config(object):
             self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL = self.load_param("TRAIN.DEFAULT", "SUMMARY_INTERVAL","int")
             self.cfg.TRAIN_DEFAULT_DISPLAY = self.load_param("TRAIN.DEFAULT", "DISPLAY","int")
             self.cfg.TRAIN_DEFAULT_SNAPSHOT_KEPT = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_KEPT","int")
-            self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = self.load_param("PASCAL.DEFAULT", "SNAPSHOT_PREFIX")
+            self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_PREFIX")
             
             self.cfg.TRAIN_DEFAULT_DEBUG = self.load_param("TRAIN.DEFAULT", "DEBUG", "bool")
             self.cfg.TRAIN_DEFAULT_USE_FLIPPED = self.load_param("TRAIN.DEFAULT", "USE_FLIPPED", "bool")
-            self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_ITERS", "int")            
+            self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_ITERS", "int")
+            self.cfg.TRAIN_DEFAULT_ROI_METHOD = self.load_param("TRAIN.DEFAULT", "ROI_METHOD")              
             self.cfg.TRAIN_DEFAULT_SCALES = self.load_param("TRAIN.DEFAULT", "SCALES","list","int")
             self.cfg.TRAIN_DEFAULT_MAX_SIZE = self.load_param("TRAIN.DEFAULT", "MAX_SIZE","int")
             self.cfg.TRAIN_DEFAULT_ASPECT_GROUPING \
@@ -194,7 +206,7 @@ class Config(object):
         if proto == "list":
             cls = None
             try:
-                module = importlib.import_module('__builtin__')
+                module = importlib.import_module('builtins')
                 cls = getattr(module, sub_proto)
                 
             except AttributeError:
@@ -203,7 +215,7 @@ class Config(object):
                 cls = getattr(module, sub_proto)    
                 
             except Exception as e:
-                print ("[Error]load_param: {}".format(str(e)))
+                print ("[Error] load_param: {}".format(str(e)))
                 
             assert cls != None, "[Error] unable to load parameters: unknown type"
             
@@ -218,7 +230,7 @@ class Config(object):
                     val = self.parser.get(bloc, param)
                     return val.lower() in ['true','yes','1']
                     
-                module = importlib.import_module('__builtin__')
+                module = importlib.import_module('builtins')
                 cls = getattr(module, proto)
                 
             except AttributeError:

@@ -33,13 +33,12 @@ class Network(object):
         
     def create_architecture(self, mode, num_classes, tag=None):
         self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])
-        self._labels = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, num_classes])
+        #self._labels = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, num_classes])
+        self._labels = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, 1])
         self._tag = tag
     
         self._num_classes = num_classes
         self._mode = mode
-    
-        self._num_anchors = self._num_scales * self._num_ratios
     
         training = mode == 'TRAIN'
         testing = mode == 'TEST'
@@ -105,11 +104,19 @@ class Network(object):
         return cls_prob, cls_pred
     
     
-    def _image_classification(self, fc7, is_training, initializer, initializer_bbox):
+    def _image_classification(self, net, is_training, initializer):
+        """
         cls_score = slim.fully_connected(fc7, self._num_classes, 
                                            weights_initializer=initializer,
                                            trainable=is_training,
                                            activation_fn=None, scope='cls_score')
+        """
+        cls_score = slim.conv2d(net, self._num_classes, [1, 1],
+                          weights_initializer=initializer,
+                          trainable=is_training,
+                          activation_fn=None, scope='cls_score')
+        #print("cls_score.shape: ", cls_score.shape)
+        
         cls_prob = tf.nn.softmax(cls_score, name="cls_prob")
         cls_pred = tf.argmax(cls_score, axis=1, name="cls_pred")
     
@@ -125,9 +132,15 @@ class Network(object):
             
             # class loss
             cls_score = self._predictions["cls_score"]
-            labels = tf.reshape(self._targets["labels"], [-1])
-            #loss_cls = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=labels)) # single-labels
-            loss_cls = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=cls_score, multi_class_labels=labels))
+            labels = self._labels
+            labels = tf.reshape(labels, [-1])
+            
+            #cls_score = tf.reshape(cls_score, labels.shape)
+            print("cls_score.shape: ", cls_score.shape)
+            print("labels.shape: ", labels.shape)
+            
+            loss_cls = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=labels)) # single-labels
+            #loss_cls = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=cls_score, multi_class_labels=labels))
                         
             regularization_loss = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
             self._losses['loss_cls'] = loss_cls + regularization_loss

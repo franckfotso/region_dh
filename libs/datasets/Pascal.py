@@ -18,7 +18,6 @@ from multiprocessing import Process, Queue
 
 from datasets.Dataset import Dataset
 from datasets.Image import Image
-from utils.regression import *
 from utils.timer import Timer
 
 class Pascal(Dataset):
@@ -42,6 +41,8 @@ class Pascal(Dataset):
                  cls_to_id,
                  sets,
                  cfg)
+        
+        self.load_classes(cfg.PASCAL_DATASET_FILE_CLS)
         
     def get_cfg(self):
         return self._cfg
@@ -169,7 +170,7 @@ class Pascal(Dataset):
                 anno_pn = osp.join(anno_DIR, im_nm+".xml")
                 
                 image = Image(filename=img_fn,pathname=img_pn)                
-                rois = self.readXmlAnno(anno_pn, self.cls_to_id)
+                rois = self.readXmlAnno(anno_pn)
                 
                 image.gt_rois = rois
                 _images.append(image)
@@ -180,7 +181,7 @@ class Pascal(Dataset):
             format(proc_id, l_start, l_end, len(im_names), timer.average_time))
                 
             #return on queue
-            queue.put([_masks, _images])           
+            queue.put(_images)           
         
         processes = []
         queues  = []
@@ -202,7 +203,7 @@ class Pascal(Dataset):
             l_start += l_offset
             
         for proc_id in range(num_proc):            
-            _masks, _images = queues[proc_id].get()
+            _images = queues[proc_id].get()
             images.extend(_images)
             processes[proc_id].join()
             
@@ -450,7 +451,7 @@ class Pascal(Dataset):
 
     def built_output_dir(self, root_dir, phase):
         output_dir = osp.join(root_dir, self.cfg.MAIN_DIR_OUTPUTS, self.name, 
-                              phase+'_'+self.cfg.TRAIN_DEFAULT_SEGM_METHOD)
+                              phase+'_'+self.cfg.TRAIN_DEFAULT_ROI_METHOD)
         
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)

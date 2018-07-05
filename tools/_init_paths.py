@@ -7,14 +7,9 @@ def add_path(path):
 
 this_dir = osp.dirname(__file__)
 
-# Add caffe to PYTHONPATH
-caffe_path = osp.join(this_dir, '..', 'externals','caffe-mnc', 'python')
-#caffe_path = osp.join(this_dir, '..', 'externals','caffe-fast-rcnn', 'python')
-add_path(caffe_path)
-
-# Add selective_search to PYTHONPATH
-selective_search_path = osp.join(this_dir, '..', 'externals','selective_search_py')
-add_path(selective_search_path)
+# Add models to PYTHONPATH
+model_path = osp.join(this_dir, '..', 'models')
+add_path(model_path)
 
 # Add libs to PYTHONPATH
 lib_path = osp.join(this_dir, '..', 'libs')

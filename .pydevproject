@@ -7,5 +7,6 @@
 <pydev_property name="org.python.pydev.PYTHON_PROJECT_INTERPRETER">Default</pydev_property>
 <pydev_pathproperty name="org.python.pydev.PROJECT_EXTERNAL_SOURCE_PATH">
 <path>/home/rfm/eclipse/python/region-dh/libs</path>
+<path>/home/rfm/eclipse/python/region-dh/models</path>
 </pydev_pathproperty>
 </pydev_project>

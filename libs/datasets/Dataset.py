@@ -24,24 +24,10 @@ class Dataset(object):
         self._cls_to_id = cls_to_id
         self._classes = classes
         self._sets = sets
+        
         self._classes = []
         self._rgb_to_cls = {}
-        self._num_cls = 0
-        
-        self.load_classes(cfg)
-        self.load_rgb_idx(cfg)
-
-    def get_rgb_idx(self):
-        return self._rgb_idx
-
-
-    def set_rgb_idx(self, value):
-        self._rgb_idx = value
-
-
-    def del_rgb_idx(self):
-        del self._rgb_idx
-
+        self._num_cls = 0       
 
     def get_num_cls(self):
         return self._num_cls
@@ -115,22 +101,9 @@ class Dataset(object):
         del self._sets
 
         
-    def load_rgb_idx(self, cfg):
-        self.rgb_to_cls = {}
-        rgb_to_cls_file = osp.join(cfg.MAIN_DIR_ROOT, "config", 
-                              cfg.PASCAL_DATASET_FILE_SEGM)
-        
-        with open(rgb_to_cls_file, 'r') as f:
-            for line in f:
-                rgb_cls = line.split('\n')[0].split('\r')[0].split(',')
-                cls, rgb_str =  rgb_cls[0], '_'.join(rgb_cls[1:])
-                self.rgb_to_cls[rgb_str] = cls
-            f.close()
-        
-    def load_classes(self, cfg):
+    def load_classes(self, cls_file):
         self.classes = []
-        cls_file = osp.join(cfg.MAIN_DIR_ROOT, "config", 
-                              cfg.PASCAL_DATASET_FILE_CLS)
+        cls_file = osp.join(self.cfg.MAIN_DIR_ROOT, "config", cls_file)
         
         with open(cls_file, 'r') as f:
             for line in f:
@@ -156,7 +129,6 @@ class Dataset(object):
     cls_to_id = property(get_cls_to_id, set_cls_to_id, del_cls_to_id, "cls_to_id's docstring")
     sets = property(get_sets, set_sets, del_sets, "sets's docstring")
     num_cls = property(get_num_cls, set_num_cls, del_num_cls, "num_cls's docstring")
-    rgb_idx = property(get_rgb_idx, set_rgb_idx, del_rgb_idx, "rgb_idx's docstring")
     
 
     

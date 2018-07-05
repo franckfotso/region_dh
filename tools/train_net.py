@@ -6,21 +6,27 @@
 # Licensed under MIT License
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # usage: python tools/train_net.py --gpu_id 0 --dataset voc_2007 \
-#        --gt_set train_val --net AlexNet \
+#        --gt_set train_val --net VGG16 --techno SSDH \
 #        --iters 40000 --cache_im_dir cache/voc2007_train
+#
+# usage: python tools/train_net.py --gpu_id 0 --dataset cifar10 \
+#        --gt_set train_val --net VGG16 --techno SSDH \
+#        --iters 80000 --cache_im_dir cache/voc2007_train
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 from __future__ import print_function
 import _init_paths
-import argparse, pprint
+import argparse, pprint, os
 import os.path as osp
 import numpy as np
 import tensorflow as tf
 
 from Config import Config
 from datasets.Pascal import Pascal
+from datasets.CIFAR10 import CIFAR10 
 from main.Trainer import Trainer
 from models.nets.AlexNet import AlexNet
+from models.nets.VGG16 import VGG16
 
 def parse_args():
     # construct the argument parse and parse the arguments
@@ -79,6 +85,9 @@ if __name__ == '__main__':
     
     if args["dataset"] in  ds_pascal:
         dataset = Pascal(name=args["dataset"], path_dir=dataset_DIR, cfg=cfg)
+    
+    elif args["dataset"] == "cifar10":
+        dataset = CIFAR10(name=args["dataset"], path_dir=dataset_DIR, cfg=cfg)
         
     assert dataset != None, \
     "[ERROR] unable to build {} dataset. Available: {}".format(args["dataset"], ds_pascal)
@@ -92,8 +101,13 @@ if __name__ == '__main__':
     print ('[INFO] dataset.val: {}'.format(dataset.sets["val"]["num_items"]))
     
     if gt_set == "train_val":
-        train_images = dataset.load_gt_rois(gt_set="train")
-        val_images = dataset.load_gt_rois(gt_set="val")
+        if dataset.name in ds_pascal:
+            train_images = dataset.load_gt_rois(gt_set="train")
+            val_images = dataset.load_gt_rois(gt_set="val")
+            
+        elif dataset.name == "cifar10":
+            (train_images, val_images), _ = dataset.load_images()
+            
         print ('[INFO] train_images.num: {}'.format(len(train_images)))
         print ('[INFO] val_images.num: {}'.format(len(val_images)))        
     else:
@@ -102,12 +116,18 @@ if __name__ == '__main__':
     
     # tensorboard directory
     tb_dir = osp.join(cfg.MAIN_DIR_LOGS, args["dataset"])
+    if not osp.exists(tb_dir):
+        os.makedirs(tb_dir)
         
     net = None
     weights = None # pretrained weights
     if args['net'] == "AlexNet":
-        net = AlexNet()
+        net = AlexNet(cfg)
         weights = "models/pretrained/alexnet_weights.h5"
+        
+    elif args['net'] == "VGG16":
+        net = VGG16(cfg)
+        weights = "models/pretrained/vgg16_weights.h5"
         
     assert weights != None, \
     "[ERROR] invalid network provided. Found: {}".format(args["net"])

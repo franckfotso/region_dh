@@ -11,9 +11,8 @@
 import os.path as osp
 import numpy as np
 import tensorflow as tf
-import time, glob
+import time, glob, os
 from utils.timer import Timer
-from utils.regression import *
 
 import tensorflow as tf
 from tensorflow.python import pywrap_tensorflow
@@ -70,7 +69,7 @@ class SolverWrapper(object):
         # Find previous snapshots if there is any to restore from
         lsf, nfiles, sfiles = self.find_previous()
     
-        # Initialize the variables or restore them from the last snapshot
+        # Initialise the variables or restore them from the last snapshot
         if lsf == 0:
             rate, last_snapshot_iter, stepsizes, np_paths, ss_paths = self.initialize(sess)
         else:
@@ -179,21 +178,21 @@ class SolverWrapper(object):
         np_paths = []
         ss_paths = []
         # Fresh train directly from ImageNet weights
-        print('Loading initial model weights from {:s}'.format(self.pretrained_model))
+        print('Loading initial model weights from {:s}'.format(self.weights))
         variables = tf.global_variables()
         # Initialize all variables first
         sess.run(tf.variables_initializer(variables, name='init'))
-        var_keep_dic = self.get_variables_in_checkpoint_file(self.pretrained_model)
+        var_keep_dic = self.get_variables_in_checkpoint_file(self.weights)
         # Get the variables to restore, ignoring the variables to fix
         variables_to_restore = self.net.get_variables_to_restore(variables, var_keep_dic)
     
         restorer = tf.train.Saver(variables_to_restore)
-        restorer.restore(sess, self.pretrained_model)
+        restorer.restore(sess, self.weights)
         print('Loaded.')
         # Need to fix the variables before loading, so that the RGB weights are changed to BGR
         # For VGG16 it also changes the convolutional weights fc6 and fc7 to
         # fully connected weights
-        self.net.fix_variables(sess, self.pretrained_model)
+        self.net.fix_variables(sess, self.weights)
         print('Fixed.')
         last_snapshot_iter = 0
         rate = self.cfg.TRAIN_DEFAULT_LEARNING_RATE
@@ -274,8 +273,17 @@ class SolverWrapper(object):
             # We will handle the snapshots ourselves
             self.saver = tf.train.Saver(max_to_keep=100000)
             # Write the train and validation information to tensorboard
-            self.writer = tf.summary.FileWriter(self.tbdir, sess.graph)
-            self.valwriter = tf.summary.FileWriter(self.tbvaldir)
+            
+            train_tb_dir = osp.join(self.tb_dir, "train")
+            if not osp.exists(train_tb_dir):
+                os.makedirs(train_tb_dir)
+                
+            val_tb_dir = osp.join(self.tb_dir, "val")
+            if not osp.exists(val_tb_dir):
+                os.makedirs(val_tb_dir)
+            
+            self.writer = tf.summary.FileWriter(train_tb_dir, sess.graph)
+            self.valwriter = tf.summary.FileWriter(val_tb_dir)
     
         return lr, train_op
     
