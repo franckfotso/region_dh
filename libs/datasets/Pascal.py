@@ -449,9 +449,9 @@ class Pascal(Dataset):
                         
         return images
 
-    def built_output_dir(self, root_dir, phase):
-        output_dir = osp.join(root_dir, self.cfg.MAIN_DIR_OUTPUTS, self.name, 
-                              phase+'_'+self.cfg.TRAIN_DEFAULT_ROI_METHOD)
+    def built_output_dir(self, root_dir, phase, net):
+        output_dir = osp.join(root_dir, self.cfg.MAIN_DIR_OUTPUTS, 
+                              self.name, phase+'_'+net)
         
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)

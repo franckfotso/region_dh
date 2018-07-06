@@ -105,12 +105,13 @@ class IMGenerator(object):
         
     def built_image_blob(self, images, scale_inds):
         num_imgs = len(images)
+        #print("built_image_blob > num_imgs: ", num_imgs)
+        
+        built_im_RAWs = []
+        built_im_scales = []
         
         for im_i in range(num_imgs):
-            im_RAW = cv2.imread(images[im_i].pathname) 
-               
-            built_im_RAWs = []
-            built_im_scales = []
+            im_RAW = cv2.imread(images[im_i].pathname)          
             
             target_size = self.cfg.TRAIN_DEFAULT_SCALES[scale_inds[im_i]]
             PIXEL_MEANS = np.array([[self.cfg.MAIN_DEFAULT_PIXEL_MEANS]])
@@ -136,11 +137,13 @@ class IMGenerator(object):
         
         im_scale = float(target_size) / float(im_size_min)        
         # Prevent the biggest axis from being more than MAX_SIZE
+        #"""
         if np.round(im_scale * im_size_max) > max_size:
             im_scale = float(max_size) / float(im_size_max)
             
         im_RAW = cv2.resize(im_RAW, None, None, fx=im_scale, fy=im_scale,
                         interpolation=cv2.INTER_LINEAR)
+        #"""
         
         return im_RAW, im_scale
        
@@ -153,11 +156,12 @@ class IMGenerator(object):
         for i in range(num_images):
             im_RAW = im_RAWs[i]
             blob[i, 0:im_RAW.shape[0], 0:im_RAW.shape[1], :] = im_RAW
-    
+        
+        # caffe - only
         # Move channels (axis 3) to axis 1
         # Axis order will become: (batch elem, channel, height, width)
-        channel_swap = (0, 3, 1, 2)
-        blob = blob.transpose(channel_swap)
+        #channel_swap = (0, 3, 1, 2)
+        #blob = blob.transpose(channel_swap)
         
         return blob
 

@@ -18,9 +18,9 @@ import tensorflow as tf
 from tensorflow.python import pywrap_tensorflow
 
 try:
-  import cPickle as pickle
+    import cPickle as pickle
 except ImportError:
-  import pickle
+    import pickle
 
 class SolverWrapper(object):
     """A simple wrapper for the training process
@@ -83,6 +83,11 @@ class SolverWrapper(object):
         stepsizes.append(max_iters)
         stepsizes.reverse()
         next_stepsize = stepsizes.pop()
+        
+        # RFM
+        max_epochs = max_iters*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+        max_epochs = max_epochs/len(self.train_gen.images)
+        
         while iter < max_iters + 1:
             # Learning rate
             if iter == next_stepsize + 1:
@@ -92,20 +97,53 @@ class SolverWrapper(object):
                 sess.run(tf.assign(lr, rate))
                 next_stepsize = stepsizes.pop()
             
-            assert self.techno in self.cfg.MAIN_DEFAULT_TECHNOS, \
-                "[ERROR] unknown techno found {}, expected: {}".format(self.techno, self.cfg.MAIN_DEFAULT_TECHNOS)
+            timer.tic()
+            # Get training data, one batch at a time
+            blobs = self.train_gen.get_next_minibatch()
             
-            if self.techno == "SSDH":
-                self.train_model_with_ssdh(timer, last_summary_time, sess, train_op, max_iters, lr)
+            epoch = iter*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+            epoch = epoch/len(self.train_gen.images)
+
+            now = time.time()
+            if iter == 1 or now - last_summary_time > self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL:
+                # Compute the graph with summary
+                total_loss, loss_cls, acc_cls, summary = self.net.train_step_with_summary(sess, 
+                                                                              blobs, train_op)
+                #self.writer.add_summary(summary, float(iter)) # by iter
+                self.writer.add_summary(summary, float(epoch)) # by epoch
+
+                # Also check the summary on the validation set
+                blobs_val = self.val_gen.get_next_minibatch()
+                summary_val = self.net.get_summary(sess, blobs_val)
                 
-            elif self.techno == 'RegionDH':
-                raise NotImplemented
-            
-            elif self.techno == 'ISDH':
-                raise NotImplemented 
+                #self.valwriter.add_summary(summary_val, float(iter)) # by iter
+                self.valwriter.add_summary(summary_val, float(epoch)) # by epoch
+                last_summary_time = now
+            else:
+                # Compute the graph without summary
+                total_loss, loss_cls, acc_cls = self.net.train_step(sess, blobs, train_op)
+            timer.toc()
+
+            # Display training information
+
+            if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
+                """
+                # based on iters
+                print('iter: %d / %d, loss_cls: %.6f, acc_cls: %.6f\n >>> lr: %f' % \
+                      (iter, max_iters, loss_cls, acc_cls, lr.eval()))
+                """
+                
+                # based on epochs
+                print("epoch: {:.3f}/{:.3f} | total_loss: {:.6f}".\
+                      format(epoch, max_epochs, total_loss))
+                print(" >>> loss_cls: {:.6f} \n >>> acc_cls: {:.6f} \n >>> lr: {:.6f}".\
+                      format(loss_cls, acc_cls, lr.eval()))
+                print("speed: {:.3f}s / iter".format(timer.average_time))
+                print("----------------------------")
     
             # Snapshotting
             if iter % self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS == 0:
+                print("Snapshotting iter. {}...".format(iter))
                 last_snapshot_iter = iter
                 ss_path, np_path = self.snapshot(sess, iter)
                 np_paths.append(np_path)
@@ -123,33 +161,7 @@ class SolverWrapper(object):
         self.writer.close()
         self.valwriter.close()
         
-    def train_model_with_ssdh(self, timer, last_summary_time, sess, train_op, max_iters, lr):
-        timer.tic()
-        # Get training data, one batch at a time
-        blobs = self.train_gen.get_next_minibatch()
-
-        now = time.time()
-        if iter == 1 or now - last_summary_time > self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL:
-            # Compute the graph with summary
-            loss_cls, summary = self.net.train_step_with_summary(sess, blobs, train_op)
-            self.writer.add_summary(summary, float(iter))
-            
-            # Also check the summary on the validation set
-            blobs_val = self.val_gen.get_next_minibatch()
-            
-            summary_val = self.net.get_summary(sess, blobs_val)
-            self.valwriter.add_summary(summary_val, float(iter))
-            last_summary_time = now
-        else:
-            # Compute the graph without summary
-            loss_cls = self.net.train_step(sess, blobs, train_op)
-        timer.toc()
-
-        # Display training information
-        if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
-            print('iter: %d / %d, loss cls: %.6f\n >>> lr: %f' % (iter, max_iters, loss_cls, lr.eval()))
-            print('speed: {:.3f}s / iter'.format(timer.average_time))
-            
+        
     def find_previous(self):
         sfiles = os.path.join(self.output_dir, self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_*.ckpt.meta')
         sfiles = glob.glob(sfiles)
@@ -248,7 +260,7 @@ class SolverWrapper(object):
             # Build the main computation graph
             layers = self.net.create_architecture('TRAIN', self.dataset.num_cls, tag='default')
             # Define the loss
-            loss = layers['loss_cls']
+            loss = layers['total_loss']
             # Set learning rate and momentum
             lr = tf.Variable(self.cfg.TRAIN_DEFAULT_LEARNING_RATE, trainable=False)
             self.optimizer = tf.train.MomentumOptimizer(lr, self.cfg.TRAIN_DEFAULT_MOMENTUM)
@@ -274,11 +286,11 @@ class SolverWrapper(object):
             self.saver = tf.train.Saver(max_to_keep=100000)
             # Write the train and validation information to tensorboard
             
-            train_tb_dir = osp.join(self.tb_dir, "train")
+            train_tb_dir = osp.join(self.tb_dir, "plot_train")
             if not osp.exists(train_tb_dir):
                 os.makedirs(train_tb_dir)
                 
-            val_tb_dir = osp.join(self.tb_dir, "val")
+            val_tb_dir = osp.join(self.tb_dir, "plot_val")
             if not osp.exists(val_tb_dir):
                 os.makedirs(val_tb_dir)
             
@@ -340,10 +352,10 @@ class SolverWrapper(object):
             last_snapshot_iter = pickle.load(fid)
             
             np.random.set_state(st0)
-            self.data_layer._cur = cur
-            self.data_layer._perm = perm
-            self.data_layer_val._cur = cur_val
-            self.data_layer_val._perm = perm_val
+            self.train_gen.cur_idx = cur
+            self.train_gen.perm_ids = perm
+            self.val_gen.cur_idx = cur_val
+            self.val_gen.perm_ids = perm_val
     
         return last_snapshot_iter
 

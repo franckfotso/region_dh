@@ -25,14 +25,16 @@ from Config import Config
 from datasets.Pascal import Pascal
 from datasets.CIFAR10 import CIFAR10 
 from main.Trainer import Trainer
-from models.nets.AlexNet import AlexNet
-from models.nets.VGG16 import VGG16
+from nets.AlexNet import AlexNet
+from nets.VGG16 import VGG16
 
 def parse_args():
     # construct the argument parse and parse the arguments
     ap = argparse.ArgumentParser()
+    """
     ap.add_argument("--gpu_id", dest="gpu_id", default=0, 
                     help="id of GPU device", type=int)
+    """
     ap.add_argument("--dataset", dest="dataset", required=True, 
                     help="dataset name to use", type=str)
     ap.add_argument('--gt_set', dest='gt_set',
@@ -65,14 +67,11 @@ if __name__ == '__main__':
     _C = Config(config_pn="config/config.ini")
     cfg = _C.cfg
     
-    cfg.MAIN_DEFAULT_GPU_ID = args['gpu_id']
+    #cfg.MAIN_DEFAULT_GPU_ID = args['gpu_id']
     cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = args['net']+"_"+args['techno']
     
     print('Using config:')
     pprint.pprint(cfg)
-    
-    # setup tensorflow & tensorboard
-    
     
     print ('[INFO] loading dataset {} for training...'.format(args["dataset"]))
     dataset_DIR = osp.join(cfg.MAIN_DIR_ROOT, "data", args["dataset"])
@@ -115,10 +114,10 @@ if __name__ == '__main__':
         print ('[INFO] train_images.num: {}'.format(len(train_images)))
     
     # tensorboard directory
-    tb_dir = osp.join(cfg.MAIN_DIR_LOGS, args["dataset"])
+    tb_dir = osp.join(cfg.MAIN_DIR_LOGS, args["dataset"]+"_"+args['net'])
     if not osp.exists(tb_dir):
         os.makedirs(tb_dir)
-        
+    
     net = None
     weights = None # pretrained weights
     if args['net'] == "AlexNet":
@@ -127,7 +126,7 @@ if __name__ == '__main__':
         
     elif args['net'] == "VGG16":
         net = VGG16(cfg)
-        weights = "models/pretrained/vgg16_weights.h5"
+        weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"
         
     assert weights != None, \
     "[ERROR] invalid network provided. Found: {}".format(args["net"])
@@ -137,7 +136,7 @@ if __name__ == '__main__':
     
     # launch train process
     root_dir = cfg.MAIN_DIR_ROOT
-    output_dir = dataset.built_output_dir(root_dir, 'train')
+    output_dir = dataset.built_output_dir(root_dir, 'train', args["net"])
     cache_im_dir = osp.join(root_dir, args['cache_im_dir'])
     
     print ('[INFO] Start the training process on {}'.format(args["dataset"]))

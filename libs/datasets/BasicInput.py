@@ -19,15 +19,15 @@ class BasicInput(object):
         self._label = label
 
     def get_label(self):
-        return self.__label
+        return self._label
 
 
     def set_label(self, value):
-        self.__label = value
+        self._label = value
 
 
     def del_label(self):
-        del self.__label
+        del self._label
 
         
     def get_filename(self):

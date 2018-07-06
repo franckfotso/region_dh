@@ -22,8 +22,8 @@ class Network(object):
         self._predictions = {}
         self._targets = {}
         self._losses = {}
+        self._accuracies = {}
         self._layers = {}
-        self._gt_image = None
         self._act_summaries = []
         self._score_summaries = {}
         self._train_summaries = []
@@ -32,9 +32,10 @@ class Network(object):
         self.cfg = cfg
         
     def create_architecture(self, mode, num_classes, tag=None):
-        self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])
-        #self._labels = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, num_classes])
-        self._labels = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, 1])
+        self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])        
+        self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, 1])
+        
+        #self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, num_classes])
         self._tag = tag
     
         self._num_classes = num_classes
@@ -106,19 +107,25 @@ class Network(object):
     
     def _image_classification(self, net, is_training, initializer):
         """
-        cls_score = slim.fully_connected(fc7, self._num_classes, 
+        cls_score = slim.fully_connected(net, self._num_classes, 
                                            weights_initializer=initializer,
                                            trainable=is_training,
                                            activation_fn=None, scope='cls_score')
-        """
+        #"""
+        
         cls_score = slim.conv2d(net, self._num_classes, [1, 1],
                           weights_initializer=initializer,
                           trainable=is_training,
                           activation_fn=None, scope='cls_score')
-        #print("cls_score.shape: ", cls_score.shape)
+        cls_score = tf.reshape(cls_score, [cls_score.shape[0],-1]) 
         
         cls_prob = tf.nn.softmax(cls_score, name="cls_prob")
+        
         cls_pred = tf.argmax(cls_score, axis=1, name="cls_pred")
+        cls_pred = tf.reshape(cls_pred, [-1])
+        
+        #print("_image_classification > cls_score.shape: ", cls_score.shape)
+        #print("_image_classification > cls_pred.shape: ", cls_pred.shape)
     
         self._predictions["cls_score"] = cls_score
         self._predictions["cls_pred"] = cls_pred
@@ -131,23 +138,42 @@ class Network(object):
         with tf.variable_scope('LOSS_' + self._tag) as scope:
             
             # class loss
-            cls_score = self._predictions["cls_score"]
+            cls_score = self._predictions["cls_score"]                     
+            
             labels = self._labels
             labels = tf.reshape(labels, [-1])
             
-            #cls_score = tf.reshape(cls_score, labels.shape)
-            print("cls_score.shape: ", cls_score.shape)
-            print("labels.shape: ", labels.shape)
+            #print("cls_score.shape: ", cls_score.shape)
+            #print("labels.shape: ", labels.shape)
             
-            loss_cls = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=labels)) # single-labels
-            #loss_cls = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=cls_score, multi_class_labels=labels))
-                        
+            # single-label
+            """
+            _loss_cls = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=labels)
+            loss_cls = tf.reduce_mean(_loss_cls)
+            
             regularization_loss = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
             self._losses['loss_cls'] = loss_cls + regularization_loss
+            #"""
             
+            #"""
+            loss_cls = tf.losses.sparse_softmax_cross_entropy(logits=cls_score, labels=labels)
+            self._losses['loss_cls'] = loss_cls
+            self._losses['total_loss'] = tf.losses.get_total_loss()
+            #"""
+            
+            # multi-label
+            #loss_cls = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=cls_score, multi_class_labels=labels))
+                       
             self._event_summaries.update(self._losses)
+            
+            # Evaluation metrics
+            cls_pred = tf.to_int32(self._predictions["cls_pred"])
+            acc_cls = tf.contrib.metrics.accuracy(predictions=cls_pred, labels=labels, name="acc_cls")
+            self._accuracies['acc_cls'] = acc_cls
+            
+            self._event_summaries.update(self._accuracies)
     
-        return loss_cls
+        return loss_cls, acc_cls
     
     
     def _add_act_summary(self, tensor):
@@ -172,16 +198,20 @@ class Network(object):
     
     def train_step(self, sess, blobs, train_op):
         feed_dict = {self._images: blobs['data'], self._labels: blobs['labels']}
-        loss_box, _ = sess.run([self._losses['loss_box'], train_op], feed_dict=feed_dict)
-        
-        return loss_box
+        total_loss, loss_cls, acc_cls, _ = sess.run([self._losses["total_loss"],
+                                                     self._losses['loss_cls'],
+                                                     self._accuracies['acc_cls'],
+                                                     train_op], feed_dict=feed_dict)        
+        return total_loss, loss_cls, acc_cls
             
         
     def train_step_with_summary(self, sess, blobs, train_op):
         feed_dict = {self._images: blobs['data'], self._labels: blobs['labels']}
-        loss_box, summary, _ = sess.run([self._losses["loss_box"], self._summary_op, train_op], feed_dict=feed_dict)
-        
-        return loss_box, summary   
+        total_loss, loss_cls, acc_cls, summary, _ = sess.run([self._losses["total_loss"],
+                                                              self._losses['loss_cls'],
+                                                              self._accuracies['acc_cls'],
+                                                              self._summary_op, train_op], feed_dict=feed_dict)        
+        return total_loss, loss_cls, acc_cls, summary 
     
     
     
