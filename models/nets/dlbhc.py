@@ -1,6 +1,6 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Project: Region-DH
-# Module: models.nets.finetuning
+# Module: models.nets.dlbhc
 # Copyright (c) 2018
 # Written by: Franck FOTSO
 # Based on: tf-faster-rcnn 
@@ -90,43 +90,50 @@ class Network(object):
         return layers_to_output
     
     
-    def _build_network(self, is_training=True):
-        # set initializers: random
-        initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
-    
+    def _build_network(self, is_training=True):        
         pool5 = self._image_to_head(is_training)    
         fc7 = self._head_to_tail(pool5, is_training)
         with tf.variable_scope(self._scope, self._scope):
+            # image hashing
+            fc_hash = self._image_hashing(fc7, is_training)
+            
             # image classification
-            cls_prob, cls_pred = self._image_classification(fc7, is_training, initializer)
+            cls_prob, cls_pred = self._image_classification(fc_hash, is_training)
     
         self._score_summaries.update(self._predictions)
     
         return cls_prob, cls_pred
     
+    def _image_hashing(self, net, is_training):
+        # net.layers[-1]: last fc layer (fc7)
+        initializer = tf.random_normal_initializer(mean=0.0, stddev=0.005)
+        
+        # fc layer: random initializer & sigmoid activation
+        fc_hash = slim.conv2d(net, self._num_bits, [1, 1],
+                          weights_initializer=initializer,
+                          trainable=is_training,
+                          activation_fn=tf.nn.sigmoid, scope='fc_hash')
+        #fc_hash = tf.reshape(fc_hash, [fc_hash.shape[0],-1])
+        
+        self._predictions["fc_hash"] = tf.reshape(fc_hash, [fc_hash.shape[0],-1])
+        
+        return fc_hash
     
-    def _image_classification(self, net, is_training, initializer):
-        """
-        cls_score = slim.fully_connected(net, self._num_classes, 
-                                           weights_initializer=initializer,
-                                           trainable=is_training,
-                                           activation_fn=None, scope='cls_score')
-        #"""
+    def _image_classification(self, net, is_training):
+        # net.layers[-1]: fc hash
+        initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
         
         cls_score = slim.conv2d(net, self._num_classes, [1, 1],
                           weights_initializer=initializer,
                           trainable=is_training,
                           activation_fn=None, scope='cls_score')
-        cls_score = tf.reshape(cls_score, [cls_score.shape[0],-1]) 
+        cls_score = tf.reshape(cls_score, [cls_score.shape[0],-1])
         
         cls_prob = tf.nn.softmax(cls_score, name="cls_prob")
         
         cls_pred = tf.argmax(cls_score, axis=1, name="cls_pred")
         cls_pred = tf.reshape(cls_pred, [-1])
-        
-        #print("_image_classification > cls_score.shape: ", cls_score.shape)
-        #print("_image_classification > cls_pred.shape: ", cls_pred.shape)
-    
+            
         self._predictions["cls_score"] = cls_score
         self._predictions["cls_pred"] = cls_pred
         self._predictions["cls_prob"] = cls_prob
@@ -138,31 +145,14 @@ class Network(object):
         with tf.variable_scope('LOSS_' + self._tag) as scope:
             
             # class loss
-            cls_score = self._predictions["cls_score"]                     
+            cls_score = self._predictions["cls_score"]                  
             
             labels = self._labels
             labels = tf.reshape(labels, [-1])
             
-            #print("cls_score.shape: ", cls_score.shape)
-            #print("labels.shape: ", labels.shape)
-            
-            # single-label
-            """
-            _loss_cls = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=labels)
-            loss_cls = tf.reduce_mean(_loss_cls)
-            
-            regularization_loss = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
-            self._losses['loss_cls'] = loss_cls + regularization_loss
-            #"""
-            
-            #"""
             loss_cls = tf.losses.sparse_softmax_cross_entropy(logits=cls_score, labels=labels)
             self._losses['loss_cls'] = loss_cls
             self._losses['total_loss'] = tf.losses.get_total_loss()
-            #"""
-            
-            # multi-label
-            #loss_cls = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=cls_score, multi_class_labels=labels))
                        
             self._event_summaries.update(self._losses)
             
@@ -199,10 +189,12 @@ class Network(object):
     def test_image(self, sess, im_blob, label_blob):
         feed_dict = {self._images: im_blob, self._labels: label_blob}
 
-        cls_score, cls_prob, cls_pred = sess.run([self._predictions["cls_score"],
-                                                  self._predictions['cls_prob'],
-                                                  self._predictions['cls_pred']],
-                                                  feed_dict=feed_dict)
+        cls_score, cls_prob, cls_pred, fc_hash, fc7 = sess.run([self._predictions["cls_score"],
+                                                          self._predictions['cls_prob'],
+                                                          self._predictions['cls_pred'],
+                                                          self._predictions["fc_hash"],
+                                                          self._predictions["fc7"]],                                                 
+                                                          feed_dict=feed_dict)
         return cls_score, cls_prob, cls_pred
     
     

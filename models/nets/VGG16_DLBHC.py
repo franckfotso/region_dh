@@ -1,6 +1,6 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Project: Region-DH
-# Module: models.nets.VGG16
+# Module: models.nets.VGG16_DLBHC
 # Copyright (c) 2018
 # Written by: Franck FOTSO
 # Licensed under MIT License
@@ -11,15 +11,16 @@ import tensorflow.contrib.slim as slim
 from tensorflow.contrib.slim import losses
 from tensorflow.contrib.slim import arg_scope
 
-from nets.finetuning import Network
+from nets.dlbhc import Network
 
-""" VGG16: classification via fine-tuning"""
+""" VGG16: classification + hashing via fine-tuning"""
 
-class VGG16(Network):
+class VGG16_DLBHC(Network):
     
-    def __init__(self, cfg):
+    def __init__(self, cfg, num_bits):
         Network.__init__(self, cfg)
         self._scope = 'vgg_16'
+        self._num_bits = num_bits
         
     """ input => conv5 """
     def _image_to_head(self, is_training, reuse=None):
@@ -55,6 +56,10 @@ class VGG16(Network):
             net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
             if is_training:
                 net = slim.dropout(net, keep_prob=0.5, is_training=is_training, scope='dropout7')
+                
+            if not is_training:
+                # store fc7 for retrieval
+                self._predictions["fc7"] = net
     
         return net
     
@@ -76,7 +81,8 @@ class VGG16(Network):
                 print('Variables restored: %s' % v.name)
                 variables_to_restore.append(v)
     
-        return variables_to_restore    
+        return variables_to_restore
+    
     
     
     def fix_variables(self, sess, pretrained_model):

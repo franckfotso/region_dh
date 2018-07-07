@@ -88,6 +88,12 @@ class SolverWrapper(object):
         max_epochs = max_iters*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
         max_epochs = max_epochs/len(self.train_gen.images)
         
+        iters_per_epoch = int(len(self.train_gen.images)/self.cfg.TRAIN_BATCH_CFC_NUM_IMG)+1
+        snapshot_iters = iters_per_epoch*self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS
+        
+        assert snapshot_iters < max_iters, \
+        "snapshot_iters must be very lower than max_iters, got: [{},{}]".format(snapshot_iters, max_iters)
+        
         while iter < max_iters + 1:
             # Learning rate
             if iter == next_stepsize + 1:
@@ -138,11 +144,14 @@ class SolverWrapper(object):
                       format(epoch, max_epochs, total_loss))
                 print(" >>> loss_cls: {:.6f} \n >>> acc_cls: {:.6f} \n >>> lr: {:.6f}".\
                       format(loss_cls, acc_cls, lr.eval()))
+                print("max_iters: {} \nsnapshot_iters: {}".format(max_iters, snapshot_iters))
                 print("speed: {:.3f}s / iter".format(timer.average_time))
                 print("----------------------------")
     
-            # Snapshotting
-            if iter % self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS == 0:
+            # Snapshotting           
+        
+            #if iter % self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS == 0: snapshot_iters
+            if iter % snapshot_iters == 0:
                 print("Snapshotting iter. {}...".format(iter))
                 last_snapshot_iter = iter
                 ss_path, np_path = self.snapshot(sess, iter)

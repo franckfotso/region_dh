@@ -24,24 +24,24 @@ class Trainer(BasicWorker):
                  cfg)
            
     def run(self, train_images, val_images, tb_dir,
-            output_dir, techno, max_iters=40000):
+            output_dir, techno, max_epochs=20):
         """ Train a CFM network """
-        
-        assert techno in self.cfg.MAIN_DEFAULT_TECHNOS, \
-            '[ERROR] unknown task name provided: {}'.format(self.task)
             
-        if techno == 'SSDH':            
+        if self.dataset.name in ["cifar10"]:            
             train_gen = IMGenerator(train_images, self.dataset, self.cfg)
             val_gen = IMGenerator(val_images, self.dataset, self.cfg)
                                     
-        elif techno == 'RegionDH':
+        elif self.dataset.name in ["voc_2007", "voc_2012"]:
             raise NotImplemented
-        
-        elif techno == 'ISDH':
+            
+        else:
+            print("[ERROR] wrong dataset name, found: ", self.dataset.name)
             raise NotImplemented
         
         tfconfig = tf.ConfigProto(allow_soft_placement=True)
         tfconfig.gpu_options.allow_growth = True
+        
+        max_iters = int((max_epochs*len(train_images))/self.cfg.TRAIN_BATCH_CFC_NUM_IMG)
         
         with tf.Session(config=tfconfig) as sess:
             sw = SolverWrapper(self.model['net'], self.model['weights'],techno, self.dataset, 

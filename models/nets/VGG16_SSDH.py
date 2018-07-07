@@ -13,7 +13,7 @@ from tensorflow.contrib.slim import arg_scope
 
 from nets.finetuning import Network
 
-""" VGG16: classification via fine-tuning"""
+""" VGG16: classification with fine-tuning"""
 
 class VGG16(Network):
     
@@ -23,8 +23,6 @@ class VGG16(Network):
         
     """ input => conv5 """
     def _image_to_head(self, is_training, reuse=None):
-        # net.layers[-1]: input layer
-        
         with tf.variable_scope(self._scope, self._scope, reuse=reuse):
             net = slim.repeat(self._images, 2, slim.conv2d, 64, [3, 3], scope='conv1')
             net = slim.max_pool2d(net, [2, 2], scope='pool1')
@@ -44,9 +42,8 @@ class VGG16(Network):
     
     """ conv5 => fc7 """
     def _head_to_tail(self, net, is_training, reuse=None):
-        # net.layers[-1]: last conv layer
-        
         with tf.variable_scope(self._scope, self._scope, reuse=reuse):
+            #print("pool5.shape: ", pool5.shape)
             
             net = slim.conv2d(net, 4096, [7, 7], padding='VALID', scope='fc6')
             if is_training:
@@ -76,7 +73,8 @@ class VGG16(Network):
                 print('Variables restored: %s' % v.name)
                 variables_to_restore.append(v)
     
-        return variables_to_restore    
+        return variables_to_restore
+    
     
     
     def fix_variables(self, sess, pretrained_model):

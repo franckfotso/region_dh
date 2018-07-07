@@ -27,6 +27,7 @@ from datasets.CIFAR10 import CIFAR10
 from main.Trainer import Trainer
 from nets.AlexNet import AlexNet
 from nets.VGG16 import VGG16
+from nets.VGG16_DLBHC import VGG16_DLBHC
 
 def parse_args():
     # construct the argument parse and parse the arguments
@@ -45,8 +46,14 @@ def parse_args():
                     default='SSDH', type=str)
     ap.add_argument("--net", dest="net", required=True, 
                     help="backbone network", type=str)
+    """
     ap.add_argument("--iters", dest="iters", default=50000,
                     help="number of iterations for training", type=int)
+    """
+    ap.add_argument("--epochs", dest="epochs", required=True, default=20,
+                    help="number of epochs for the training", type=int)
+    ap.add_argument("--num_bits", dest="num_bits", default=48,
+                    help="number of bits for the hashing layer", type=int)
     ap.add_argument('--cache_im_dir', dest='cache_im_dir', required=True,
                     help='directory for images prepared', type=str)
     ap.add_argument("--rand", dest="rand", default=False,
@@ -125,10 +132,13 @@ if __name__ == '__main__':
         weights = "models/pretrained/alexnet_weights.h5"
         
     elif args['net'] == "VGG16":
-        net = VGG16(cfg)
+        if techno == "FT":
+            net = VGG16(cfg)
+        elif techno == "DLBHC":
+            net = VGG16_DLBHC(cfg, args["num_bits"])
         weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"
         
-    assert weights != None, \
+    assert net != None, \
     "[ERROR] invalid network provided. Found: {}".format(args["net"])
     
     model = {'net': net,'weights': weights}
@@ -140,6 +150,7 @@ if __name__ == '__main__':
     cache_im_dir = osp.join(root_dir, args['cache_im_dir'])
     
     print ('[INFO] Start the training process on {}'.format(args["dataset"]))
-    trainer.run(train_images, val_images, tb_dir, output_dir, techno, max_iters=args['iters'])    
+    max_epochs = args['epochs']    
+    trainer.run(train_images, val_images, tb_dir, output_dir, techno, max_epochs=max_epochs)    
     
     

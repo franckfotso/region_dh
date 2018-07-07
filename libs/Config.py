@@ -135,7 +135,8 @@ class Config(object):
             
             self.cfg.TRAIN_DEFAULT_DEBUG = self.load_param("TRAIN.DEFAULT", "DEBUG", "bool")
             self.cfg.TRAIN_DEFAULT_USE_FLIPPED = self.load_param("TRAIN.DEFAULT", "USE_FLIPPED", "bool")
-            self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_ITERS", "int")
+            #self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_ITERS", "int")
+            self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_EPOCHS", "int")
             self.cfg.TRAIN_DEFAULT_ROI_METHOD = self.load_param("TRAIN.DEFAULT", "ROI_METHOD")              
             self.cfg.TRAIN_DEFAULT_SCALES = self.load_param("TRAIN.DEFAULT", "SCALES","list","int")
             self.cfg.TRAIN_DEFAULT_MAX_SIZE = self.load_param("TRAIN.DEFAULT", "MAX_SIZE","int")
