@@ -32,17 +32,21 @@ class Network(object):
         self.cfg = cfg
         
     def create_architecture(self, mode, num_classes, tag=None):
-        self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])        
-        self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, 1])
         
+        training = mode == 'TRAIN'
+        testing = mode == 'TEST'
+        
+        if training:
+            self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])
+        else:
+            self._images = tf.placeholder(tf.float32, shape=[self.cfg.TEST_BATCH_CFC_NUM_IMG, None, None, 3])
+            
+        self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, 1])        
         #self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, num_classes])
         self._tag = tag
     
         self._num_classes = num_classes
-        self._mode = mode
-    
-        training = mode == 'TRAIN'
-        testing = mode == 'TEST'
+        self._mode = mode        
     
         assert tag != None
     

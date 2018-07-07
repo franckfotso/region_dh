@@ -79,26 +79,23 @@ class IMGenerator(object):
         return blobs
     
     
-    def built_label_blob(self, images):
+    def built_label_blob(self, images, multi=False):
         num_images = len(images)
         
-        if self.dataset.name in ["voc_2007","voc_2012","nus_wide"]:
+        if multi:
             # multi-label data        
             blob = np.zeros((num_images, self.dataset.num_cls), dtype=np.int32)
             for im_i in range(num_images):
                 image = images[im_i]
                 gt_classes = image.gt_rois["gt_classes"]
                 classes = np.unique(gt_classes)
-                blob[im_i, classes] = 1
-                
-        elif self.dataset.name in ["cifar10", "cifar100"]:
+                blob[im_i, classes] = 1                
+        else
             # single-label data
             blob = np.zeros((num_images, 1), dtype=np.int32)
             for im_i in range(num_images):
                 image = images[im_i]
                 blob[im_i] = image.label
-        else:
-            raise NotImplemented
             
         return blob
             

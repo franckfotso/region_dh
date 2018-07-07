@@ -189,11 +189,23 @@ class Config(object):
             self.cfg.TEST_DEFAULT_MAX_ROIS_GPU = self.load_param("TEST.DEFAULT", "MAX_ROIS_GPU", "list","int")
             self.cfg.TEST_DEFAULT_NMS = self.load_param("TEST.DEFAULT", "NMS", "float")
             self.cfg.TEST_DEFAULT_CONF_THRESH = self.load_param("TEST.DEFAULT", "CONF_THRESH", "float")
+            
+            ''' 
+                TEST.BATCH.CFC
+            '''
+            self.cfg.TEST_BATCH_CFC_NUM_IMG = self.load_param("TEST.BATCH.CFC", "NUM_IMG", "int")
            
             ''' 
                 EVAL.DEFAULT
             '''
             self.cfg.EVAL_DEFAULT_METRIC = self.load_param("EVAL.DEFAULT", "METRIC")
+            
+            ''' 
+                INDEXING
+            '''
+            self.cfg.INDEXING_NUM_IM_EST = self.load_param("INDEXING", "NUM_IM_EST", "int")
+            self.cfg.INDEXING_MAX_BUF_SIZE = self.load_param("INDEXING", "MAX_BUF_SIZE", "int")
+            self.cfg.INDEXING_CHECK_DS = self.load_param("INDEXING", "CHECK_DS", "bool")
             
             
         except Exception as e:
