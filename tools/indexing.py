@@ -33,10 +33,6 @@ def parse_args():
                         help="number of bits for the hashing layer", type=int)
     ap.add_argument("--df_len", dest="df_len", default=4096,
                         help="length of deep features vector", type=int)
-    ap.add_argument("--hash_scope", dest="hash_scope", default="fc_hash",
-                        help="scope name for the hash layer", type=str)
-    ap.add_argument("--feat_scope", dest="hash_scope", default="fc7",
-                        help="scope name for the deep feature layer", type=str)
     ap.add_argument("--im_dir", required=True,
                     help="input for target images")
     ap.add_argument("--deep_db", required=True,
@@ -57,9 +53,8 @@ if __name__ == '__main__':
     cfg = _C.cfg
 
     # hash codes & deep features extractor
-    deep_extr = DeepExtractor(args["techno"], args["num_bits"], args["df_len"], args["weights"], cfg)
-    
-    techno, num_bits, df_len, weights, cfg
+    deep_extr = DeepExtractor(args["techno"], args["arch"], args["num_cls"], 
+                              args["num_bits"], args["df_len"], args["weights"], cfg)
 
     im_pns = []
     im_dir = args['im_dir']
@@ -68,7 +63,7 @@ if __name__ == '__main__':
         categ_dir = os.path.join(im_dir, categ)
         im_fns = os.listdir(categ_dir)
         
-        if cfg.INDEXING_CHECK_DS == 1:
+        if cfg.INDEXING_CHECK_DS:
             print ('[{}/{}] Loading & checking category: {}'.format(i + 1, len(categs), categ))
         else:
             print ('[{}/{}] Loading category: {}'.format(i + 1, len(categs), categ))

@@ -9,14 +9,14 @@
 
 class DeepExtractor:
 
-    def __init__(self, techno, num_bits, df_len, weights, cfg):
+    def __init__(self, techno, arch, num_cls, num_bits, df_len, weights, cfg):
         self.techno = techno
         self.num_bits = num_bits
         self.df_len = df_len
         self.weights = weights
         self.cfg = cfg
         
-        sess, net = tf_init_feat(weights, num_bits)
+        sess, net = tf_init_feat(weights, arch, num_cls, num_bits, techno, cfg) 
         self.sess = sess
         self.net = net
 

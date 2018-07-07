@@ -207,6 +207,19 @@ class Config(object):
             self.cfg.INDEXING_MAX_BUF_SIZE = self.load_param("INDEXING", "MAX_BUF_SIZE", "int")
             self.cfg.INDEXING_CHECK_DS = self.load_param("INDEXING", "CHECK_DS", "bool")
             
+            ''' 
+                SEARCH.DEFAULT
+            '''
+            self.cfg.SEARCH_DEFAULT_MAX_CAND = self.load_param("SEARCH.DEFAULT", "MAX_CAND", "int")
+            self.cfg.SEARCH_DEFAULT_TOP_K = self.load_param("SEARCH.DEFAULT", "TOP_K", "int")
+            
+            ''' 
+                SEARCH.RENDERING
+            '''
+            self.cfg.SEARCH_RENDERING_ITEM_SIZE = self.load_param("SEARCH.RENDERING", "ITEM_SIZE", "list", "int")
+            self.cfg.SEARCH_RENDERING_ROWS = self.load_param("SEARCH.RENDERING", "ROWS", "int")
+            self.cfg.SEARCH_RENDERING_HEIGHT = self.load_param("SEARCH.RENDERING", "HEIGHT", "int")
+            
             
         except Exception as e:
             print ("[Error] loading config: {}".format(str(e)))
