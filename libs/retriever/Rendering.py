@@ -34,7 +34,7 @@ class Rendering:
             self.col = 0
             self.row += 1
 
-        # resize the image to the fixed width and height and set it in the montage
+        # resize the image to the fixed width and height and set it in the view
         image = cv2.resize(image, (self.imageH, self.imageW))
         (startY, endY) = (self.row * self.imageW, (self.row + 1) * self.imageW)
         (startX, endX) = (self.col * self.imageH, (self.col + 1) * self.imageH)
@@ -42,12 +42,12 @@ class Rendering:
 
         # if the text is not None, draw it
         if text is not None:
-            cv2.putText(self.montage, text, (startX + 10, startY + 30), cv2.FONT_HERSHEY_SIMPLEX,
-                1.0, (0, 255, 255), 3)
+            cv2.putText(self.view, text, (startX + 10, startY + 30), cv2.FONT_HERSHEY_SIMPLEX,
+                0.4, (0, 0, 255), 1)
 
         # check to see if the result should be highlighted
         if highlight:
-            cv2.rectangle(self.montage, (startX + 3, startY + 3), (endX - 3, endY - 3), (0, 255, 0), 4)
+            cv2.rectangle(self.view, (startX + 3, startY + 3), (endX - 3, endY - 3), (255, 0, 0), 4)
 
         # increment the column counter and image counter
         self.col += 1

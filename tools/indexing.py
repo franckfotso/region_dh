@@ -8,7 +8,7 @@
 # Goal: extract and index hash codes and deep features
 
 import _init_paths
-import argparse
+import argparse, os
 import numpy as np
 from indexer.DeepIndexer import DeepIndexer
 from extractor.DeepExtractor import DeepExtractor
@@ -31,8 +31,6 @@ def parse_args():
                         help="number of classes for the trained model", type=int)
     ap.add_argument("--num_bits", dest="num_bits", default=48,
                         help="number of bits for the hashing layer", type=int)
-    ap.add_argument("--df_len", dest="df_len", default=4096,
-                        help="length of deep features vector", type=int)
     ap.add_argument("--im_dir", required=True,
                     help="input for target images")
     ap.add_argument("--deep_db", required=True,
@@ -51,10 +49,14 @@ if __name__ == '__main__':
     # setup & load configs
     _C = Config(config_pn="config/config.ini")
     cfg = _C.cfg
+    
+    # TODO: handle multi-size batch for the forward
+    cfg.TEST_BATCH_CFC_NUM_IMG = cfg.INDEXING_BATCH_SIZE
+    bacth_size = cfg.INDEXING_BATCH_SIZE
 
     # hash codes & deep features extractor
-    deep_extr = DeepExtractor(args["techno"], args["arch"], args["num_cls"], 
-                              args["num_bits"], args["df_len"], args["weights"], cfg)
+    deep_extr = DeepExtractor(args["techno"], args["net"], args["num_cls"], 
+                              args["num_bits"], args["weights"], cfg)
 
     im_pns = []
     im_dir = args['im_dir']
@@ -79,38 +81,46 @@ if __name__ == '__main__':
                 except:
                     os.remove(im_pn)
                     print ('[ERROR] indexing > IOError: cannot identify image file')
-                    print ('[ERROR] Wrong file deleted: {}'.format(im_pn))
-                    
-
-    bacth_size = cfg.TEST_BATCH_CFC_NUM_IMG
-    im_fns = np.array(im_fns)
+                    print ('[ERROR] Wrong file deleted: {}'.format(im_pn))     
+    
+    im_pns = np.array(im_pns)
+    
+    assert len(im_pns) % bacth_size == 0, \
+     "[ERROR] BATCH_SIZE must be divible with total images. Set INDEXING_BATCH_SIZE = 1 to continue"
     
     # initialize the deep feature indexer
     di = DeepIndexer(args["deep_db"], 
                      estNumImages=cfg.INDEXING_NUM_IM_EST,
                      maxBufferSize=cfg.INDEXING_MAX_BUF_SIZE, verbose=True)
     
-    for i in range(0,len(im_fns), bacth_size):
-        _im_fns = im_fns[i:i+bacth_size]
+    print ('----------------------------------------------------------')
+    print ('{}-bits binary codes & deep features extraction'.format(args["num_bits"]))
+    print ('----------------------------------------------------------')
+    
+    for i in range(0,len(im_pns), bacth_size):
+        _im_pns = im_pns[i:i+bacth_size]
         
         # extract binary codes & deep features
-        binary_codes, deep_features = deep_extr.extract(_im_fns)        
+        binary_codes, deep_features = deep_extr.extract(_im_pns)        
         
         """
             indexing data extracted in hdfs file
         """ 
-        for i, (binary_code, feature_vector) in enumerate(zip(binary_codes, deep_features)):
-            # check to see if progress should be displayed
-            if j > 0 and j % 10 == 0:
-                di._debug("saved {} images".format(j), msgType="[PROGRESS]")
-
-            im_pn = _im_fns[j]
+        for j, (binary_code, feature_vector) in enumerate(zip(binary_codes, deep_features)):            
+            im_pn = _im_pns[j]
             im_fn = im_pn[im_pn.rfind(os.path.sep) + 1:]
 
             # adding fields
             di.add(im_fn, feature_vector, binary_code)
+        
+        # check to see if progress should be displayed
+        if i > 0 and bacth_size > 1 and i % bacth_size == 0:
+            di._debug("saved {} images".format(i), msgType="[PROGRESS]")
+        elif i > 0 and bacth_size == 1 and i % 10 == 0:
+            di._debug("saved {} images".format(i), msgType="[PROGRESS]")
 
-        # finish the indexing process
-        di.finish()
+    # finish the indexing process
+    di._debug("{} images sucessfully indexed".format(len(im_fns)), msgType="[INFO]")
+    di.finish()
 
         

@@ -26,7 +26,7 @@ from datasets.Pascal import Pascal
 from datasets.CIFAR10 import CIFAR10 
 from main.Trainer import Trainer
 from nets.AlexNet import AlexNet
-from nets.VGG16 import VGG16
+from nets.VGG16_FT import VGG16_FT
 from nets.VGG16_DLBHC import VGG16_DLBHC
 
 def parse_args():
@@ -133,7 +133,7 @@ if __name__ == '__main__':
         
     elif args['net'] == "VGG16":
         if techno == "FT":
-            net = VGG16(cfg)
+            net = VGG16_FT(cfg)
         elif techno == "DLBHC":
             net = VGG16_DLBHC(cfg, args["num_bits"])
         weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"

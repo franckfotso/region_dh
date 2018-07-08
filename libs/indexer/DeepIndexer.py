@@ -6,7 +6,7 @@
 # Licensed under MIT License
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-from BaseIndexer import BaseIndexer
+from indexer.BaseIndexer import BaseIndexer
 import numpy as np
 import h5py
 
@@ -82,7 +82,7 @@ class DeepIndexer(BaseIndexer):
         # initialize the datasets
         self._debug("creating datasets...")
         self.imageIDDB = self.db.create_dataset("image_ids", (self.estNumImages,),
-                                                maxshape=(None,), dtype=h5py.special_dtype(vlen=unicode))
+                                                maxshape=(None,), dtype=h5py.special_dtype(vlen=str))
         self.indexDB = self.db.create_dataset("index", (self.estNumImages, 2),
                                               maxshape=(None, 2), dtype="int")
         self.deepfeaturesDB = self.db.create_dataset("deepfeatures",

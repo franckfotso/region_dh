@@ -11,14 +11,11 @@ import tensorflow.contrib.slim as slim
 from tensorflow.contrib.slim import losses
 from tensorflow.contrib.slim import arg_scope
 
-from nets.finetuning import Network
+""" VGG16: backbone network"""
 
-""" VGG16: classification via fine-tuning"""
-
-class VGG16(Network):
+class VGG16(object):
     
-    def __init__(self, cfg):
-        Network.__init__(self, cfg)
+    def __init__(self):
         self._scope = 'vgg_16'
         
     """ input => conv5 """

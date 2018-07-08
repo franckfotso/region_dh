@@ -6,7 +6,7 @@
 # Licensed under MIT License
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-rom __future__ import print_function
+from __future__ import print_function
 import numpy as np
 import datetime
 
@@ -30,8 +30,12 @@ class BaseIndexer(object):
             end = self.idxs[idxName] + len(buf)
         # otherwise, assume that the buffer is a NumPy/SciPy array, so
         # compute the ending index based on the array shape
-        else:
-            end = self.idxs[idxName] + buf.shape[0]  # grab height
+        else: 
+            if len(np.array(buf).shape) > 0:
+                end = self.idxs[idxName] + buf.shape[0]  # grab height
+            else:
+                end = self.idxs[idxName] + 0  # grab height
+            
 
         # check to see if the dataset needs to be resized
         if end > dataset.shape[0]:

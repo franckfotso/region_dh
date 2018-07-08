@@ -206,6 +206,7 @@ class Config(object):
             self.cfg.INDEXING_NUM_IM_EST = self.load_param("INDEXING", "NUM_IM_EST", "int")
             self.cfg.INDEXING_MAX_BUF_SIZE = self.load_param("INDEXING", "MAX_BUF_SIZE", "int")
             self.cfg.INDEXING_CHECK_DS = self.load_param("INDEXING", "CHECK_DS", "bool")
+            self.cfg.INDEXING_BATCH_SIZE = self.load_param("INDEXING", "BATCH_SIZE", "int")
             
             ''' 
                 SEARCH.DEFAULT

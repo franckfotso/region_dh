@@ -90,7 +90,7 @@ class IMGenerator(object):
                 gt_classes = image.gt_rois["gt_classes"]
                 classes = np.unique(gt_classes)
                 blob[im_i, classes] = 1                
-        else
+        else:
             # single-label data
             blob = np.zeros((num_images, 1), dtype=np.int32)
             for im_i in range(num_images):

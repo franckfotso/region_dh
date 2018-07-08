@@ -6,13 +6,13 @@
 # Licensed under MIT License
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+from extractor.feat_tools import *
 
 class DeepExtractor:
 
-    def __init__(self, techno, arch, num_cls, num_bits, df_len, weights, cfg):
+    def __init__(self, techno, arch, num_cls, num_bits, weights, cfg):
         self.techno = techno
         self.num_bits = num_bits
-        self.df_len = df_len
         self.weights = weights
         self.cfg = cfg
         
@@ -20,11 +20,7 @@ class DeepExtractor:
         self.sess = sess
         self.net = net
 
-
-    def extract(self, im_pns):
-        print '----------------------------------------------------------'
-        print ('{}-bits binary codes & {}-vector deep features extraction'.format(self.num_bits, self.df_len))
-        print '----------------------------------------------------------'
+    def extract(self, im_pns):        
         binary_codes = None
         if self.net != None:
             binary_codes, deep_features = tf_batch_feat(im_pns,
@@ -33,6 +29,6 @@ class DeepExtractor:
                                                        self.techno,
                                                        self.cfg)
         else:
-            print "[ERROR] DeepExtractor > extract: Error, net is not defined"
+            print ("[ERROR] DeepExtractor > extract: Error, net is not defined")
             
         return binary_codes, deep_features

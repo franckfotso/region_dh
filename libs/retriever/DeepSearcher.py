@@ -13,7 +13,7 @@ import numpy as np
 from sklearn.metrics import hamming_loss
 from sklearn.metrics.pairwise import pairwise_distances
 
-from dist_tools import *
+from retriever.dist_tools import *
 from collections import namedtuple
 
 class DeepSearcher:
@@ -49,7 +49,7 @@ class DeepSearcher:
         for (can_id, can_fVector) in zip(l_cand_id, l_can_fVector):
             # compute distance between the two feature vector
             #d = dists.chi2_distance(qry_fVector, can_fVector)
-            d = distanceMetric(qry_fVector, can_fVector)
+            d = self.distanceMetric(qry_fVector, can_fVector)
             d = float(d) / float(len(can_fVector))
             if (int)(d * 100) > 0:
                 results[can_id] = d
