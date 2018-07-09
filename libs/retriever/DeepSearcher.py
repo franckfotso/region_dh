@@ -48,7 +48,6 @@ class DeepSearcher:
         results = {}
         for (can_id, can_fVector) in zip(l_cand_id, l_can_fVector):
             # compute distance between the two feature vector
-            #d = dists.chi2_distance(qry_fVector, can_fVector)
             d = self.distanceMetric(qry_fVector, can_fVector)
             d = float(d) / float(len(can_fVector))
             if (int)(d * 100) > 0:
