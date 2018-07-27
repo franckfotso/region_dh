@@ -55,7 +55,7 @@ class IMGenerator(object):
         return self.get_minibatch(minibatch_imgs)
         
         
-    def get_minibatch(self, images):
+    def get_minibatch(self, images, multi=False):
         """Given an image obj, construct a minibatch sampled from it."""
         
         num_imgs = len(images)
@@ -69,7 +69,7 @@ class IMGenerator(object):
         
         # resize & build data blob: according caffe format
         im_blob, im_scales = self.built_image_blob(images, random_scale_inds)
-        label_blob = self.built_label_blob(images)
+        label_blob = self.built_label_blob(images, multi=multi)
         
         blobs = {'data': im_blob, "labels": label_blob }
         
@@ -83,15 +83,25 @@ class IMGenerator(object):
         num_images = len(images)
         
         if multi:
-            # multi-label data        
+            # multi-label data
+            # Note: labels are encoded as a string. e.g: '010101101'
+            #print("[INFO] multi-label blob")
             blob = np.zeros((num_images, self.dataset.num_cls), dtype=np.int32)
             for im_i in range(num_images):
                 image = images[im_i]
-                gt_classes = image.gt_rois["gt_classes"]
-                classes = np.unique(gt_classes)
-                blob[im_i, classes] = 1                
+                
+                try:
+                    label = np.array([int(c) for c in list(image.label)])
+                except:
+                    print("[ERROR] failed to decode label into array")
+                    
+                assert len(label) == self.dataset.num_cls, \
+                "[ERROR] mismatch between label encoded and num_cls, {} != {}".\
+                format(len(label), self.dataset.num_cls)
+                blob[im_i] = label               
         else:
             # single-label data
+            #print("[INFO] single-label blob")
             blob = np.zeros((num_images, 1), dtype=np.int32)
             for im_i in range(num_images):
                 image = images[im_i]

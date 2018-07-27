@@ -10,13 +10,16 @@
 # Goal: evaluate performance of the retrieval system
 
 import _init_paths
-import h5py, csv, argparse, os
+import h5py, csv, argparse, os, time
 import numpy as np
 from sklearn.metrics import hamming_loss
 from sklearn.metrics.pairwise import pairwise_distances
-from retriever.dist_tools import *
+from multiprocessing import Process, Queue
+
 from Config import Config
-from datasets.CIFAR10 import CIFAR10 
+from datasets.CIFAR10 import CIFAR10
+from retriever.dist_tools import *
+from utils.timer import Timer
 
 def parse_args():
     # construct the argument parse and parse the arguments
@@ -39,26 +42,76 @@ def parse_args():
     return args
 
 
-def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, encoding="bin_code"):
-    """ compute the Mean Average Precision (MAP) for the top-k retrieval """
+def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg, encoding="bin_code"):
+    """ compute the Mean Average Precision (MAP) for the top-k retrieval """    
     num_qrys = len(val_codes)
     
-    AP = np.zeros((num_qrys))
     # index of the k positions
     m = np.array([ x+1 for x in range(top_k)])
+    AP = np.zeros((num_qrys))    
     num_TP = np.zeros((len(m)))
     
-    for i, (val_label, val_code) in enumerate(zip(val_labels, val_codes)):
-        qry_label = val_label
-        qry_code = val_code
+    processes = []
+    queues  = []
+    num_proc = cfg.MAIN_DEFAULT_CORES
+    num_items = len(val_codes)
+
+    l_start = 0   
+    if num_items <= num_proc:
+        num_proc = num_items
+    l_offset = int(np.ceil(num_items / float(num_proc)))
+    
+    # setup & start paralell processing
+    for proc_id in range(num_proc):
+        l_end = min(l_start + l_offset, num_items)
+        q = Queue()
+        p = Process(target=_comp_precision, 
+                    args=(l_start, l_end, val_labels, val_codes, 
+                          train_labels, train_codes, top_k, encoding, q))
+        p.start()
+        processes.append(p)
+        queues.append(q)
+        l_start += l_offset
+
+    # collect results
+    for proc_id in range(num_proc):
+        _num_TP, _ids, _AP = queues[proc_id].get()
         
-        print ("[INFO] Processing query {}/{}".format(i+1, len(val_codes)))
-        
+        num_TP  += _num_TP
+        for _i, _id in enumerate(_ids):
+            AP[_id] = _AP[_i]
+                   
+    # weighted MAP
+    MAP = np.mean(AP)
+    print ("[INFO] weighted MAP: {:.3}".format(MAP))
+    
+    # precision at k results
+    prec_k = num_TP/(m*num_qrys)
+    
+    return prec_k, MAP
+
+
+def _comp_precision(l_start, l_end, val_labels, val_codes, 
+                    train_labels, train_codes, 
+                    top_k, encoding, queue):
+    
+    # index of the k positions
+    m = np.array([ x+1 for x in range(top_k)])
+    _num_TP = np.zeros((len(m)))
+    _AP = []
+    _ids = []
+
+    for i in range(l_start, l_end):
+        qry_label = val_labels[i]
+        qry_code = val_codes[i]
+
+        print ("[INFO] Processing query {}/{}".format(i+1, len(val_labels)))
+
         qry_rlts = []
         top_k = min(top_k, len(train_codes))
-        
+
         if encoding == "bin_code":
-            # hamming distance
+            #print ("[INFO] == using hamming distance ")
             qry_codes = [qry_code]
             rlt_dists = pairwise_distances(np.array(qry_codes), np.array(train_codes), 'hamming')[0]            
             # get indexes sorted in min order
@@ -67,51 +120,45 @@ def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, enco
             # sort HAMMING distance in ascending order            
             qry_rlts = sorted([(rlt_dists[k], train_labels[k], k) for k in s_indexes]) # => (dist, label, idx)
             qry_rlts = qry_rlts[:top_k]
-            
+
         else:
-            # euclidian / chi-2 distance
-            rlt_dists = {}
+            #print ("[INFO] == using euclidean")
+            qry_rlts = {}
             for id_code, train_code in enumerate(train_codes):
                 # compute distance between the two feature vector
-                d = chi2_distance(qry_code, train_code)
-                d = float(d) / float(len(train_code))
-                if (int)(d * 100) > 0:
-                    rlt_dists[id_code] = d
+                d = euclidean_dist(qry_code, train_code) # euclidean   
+                qry_rlts[id_code] = d
+                #print("d: ", d)
                     
             # sort all results such that small distance values are in the top
             qry_rlts = sorted([(v, train_labels[k], k) for (k, v) in qry_rlts.items()])
             qry_rlts = qry_rlts[:top_k]
-        
+
         # similarity (0, 1) observed for each j-th position
         r = np.zeros((len(qry_rlts))) # r(j)
         N_pos = 0 # number of relevants images within the k results
-        
+
         for j, (dist, label, idx) in enumerate(qry_rlts):
             if qry_label == label:
                 r[j] = 1 # number of shared label. 1 for single-label   
                 N_pos += 1
-        
+
         # average cummulative gains over the k postions
         ACG = np.cumsum(r)/m
-        
+
         # weighted AP for each query
         if N_pos == 0:
-            AP[i] = 0
+            AP = 0.0            
         else:
-            AP[i] = np.sum(ACG*r)/N_pos
+            AP = np.sum(ACG*r)/N_pos
             
-        print ("[INFO] Processing query {}/{}, AP: {:.3}".format(i+1, len(val_codes), AP[i]))
-            
-        num_TP += np.cumsum(r)
-            
-    # weighted MAP
-    MAP = np.mean(AP)
-    print ("[INFO] weighted MAP: {:.3}".format(MAP))
-    
-    # precision at k results
-    prec_k = num_TP/(m*num_qrys)
-    
-    return prec_k, MAP           
+        _AP.append(AP)
+        _ids.append(i)
+        print ("[INFO] Processing query {}/{}, AP: {:.3}".format(i+1, len(val_codes), AP))
+
+        _num_TP = _num_TP + np.cumsum(r)
+
+    queue.put([_num_TP, _ids, _AP])
         
         
 if __name__ == '__main__':
@@ -168,8 +215,6 @@ if __name__ == '__main__':
     assert args["encoding"] in ["bin_code", "deep_feat"], \
     "[ERROR] wrong encoding provided, found: {}, available: {}".format(args["encoding"],
                                                                       ["bin_code", "deep_feat"])
-    train_im_fns = train_db["image_ids"]
-    val_im_fns = val_db["image_ids"]
     
     if args["encoding"] == "bin_code":
         train_codes = train_db["binarycode"]
@@ -178,7 +223,17 @@ if __name__ == '__main__':
         train_codes = train_db["deepfeatures"]
         val_codes = val_db["deepfeatures"]
         
+    train_codes = np.array(train_codes)
+    val_codes = np.array(val_codes)
+    
+    train_db.close()
+    val_db.close()
+    
+    """
     # sort labels according codes
+    train_im_fns = train_db["image_ids"]
+    val_im_fns = val_db["image_ids"]
+    
     print ("sort labels according codes order...")
     _train_fns = [img.filename for img in train_images]
     _val_fns = [img.filename for img in val_images]
@@ -200,10 +255,14 @@ if __name__ == '__main__':
         idx = _val_fns.index(im_fn)
         s_val_labels.append(val_labels[idx])
     val_labels = s_val_labels
+    """
     
+    now = time.time()  
+    #prec_k, MAP  = comp_precision(val_labels[:100], val_codes[:100], 
     prec_k, MAP  = comp_precision(val_labels, val_codes, 
                                   train_labels, train_codes, 
-                                  args["num_rlts"], args["encoding"])
+                                  args["num_rlts"], cfg, args["encoding"])
+    print("comp_precision, speed: {:.3f}s".format(time.time() - now))
     
     # save results
     this_dir = os.path.dirname(__file__)

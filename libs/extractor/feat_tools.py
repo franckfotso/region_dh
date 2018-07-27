@@ -11,6 +11,7 @@ import numpy as np
 import numpy.random as npr
 import tensorflow as tf
 from nets.VGG16_DLBHC import VGG16_DLBHC
+from nets.VGG16_SSDH import VGG16_SSDH
 from datasets.Image import Image
 from datasets.IMGenerator import IMGenerator
 
@@ -26,6 +27,10 @@ def tf_init_feat(weights, net_name, num_cls, num_bits, techno, cfg):
     if net_name == "VGG16":
         if techno == "DLBHC":
             net = VGG16_DLBHC(cfg, num_bits)
+            
+        elif techno == "SSDH":
+            net = VGG16_SSDH(cfg, num_bits)
+                    
         else:
             raise NotImplemented
         net.create_architecture('TEST', num_cls, tag='default')
@@ -65,7 +70,7 @@ def tf_batch_feat(im_pns, sess, net, techno, cfg):
     
     _, _, _, fc_hash, fc7 = _batch_foward(sess, net, images, data_gen, cfg)
     
-    if techno == "DLBHC":
+    if techno in ["DLBHC", "SSDH"]:
         # apply a binary thresholding: 0.5
         binary_codes = np.where(fc_hash >= 0.5, 1, 0)
     else:

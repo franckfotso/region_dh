@@ -25,9 +25,9 @@ from Config import Config
 from datasets.Pascal import Pascal
 from datasets.CIFAR10 import CIFAR10 
 from main.Trainer import Trainer
-from nets.AlexNet import AlexNet
 from nets.VGG16_FT import VGG16_FT
 from nets.VGG16_DLBHC import VGG16_DLBHC
+from nets.VGG16_SSDH import VGG16_SSDH
 
 def parse_args():
     # construct the argument parse and parse the arguments
@@ -54,8 +54,6 @@ def parse_args():
                     help="number of epochs for the training", type=int)
     ap.add_argument("--num_bits", dest="num_bits", default=48,
                     help="number of bits for the hashing layer", type=int)
-    ap.add_argument('--cache_im_dir', dest='cache_im_dir', required=True,
-                    help='directory for images prepared', type=str)
     ap.add_argument("--rand", dest="rand", default=False,
                     help="randomize (do not use a fixed seed)", type=bool)
     ap.add_argument("--verbose", dest="verbose", default=False,
@@ -92,7 +90,7 @@ if __name__ == '__main__':
     if args["dataset"] in  ds_pascal:
         dataset = Pascal(name=args["dataset"], path_dir=dataset_DIR, cfg=cfg)
     
-    elif args["dataset"] == "cifar10":
+    elif args["dataset"] in ["cifar10", "cifar10_m"]:
         dataset = CIFAR10(name=args["dataset"], path_dir=dataset_DIR, cfg=cfg)
         
     assert dataset != None, \
@@ -111,7 +109,7 @@ if __name__ == '__main__':
             train_images = dataset.load_gt_rois(gt_set="train")
             val_images = dataset.load_gt_rois(gt_set="val")
             
-        elif dataset.name == "cifar10":
+        elif dataset.name in ["cifar10", "cifar10_m"]:
             (train_images, val_images), _ = dataset.load_images()
             
         print ('[INFO] train_images.num: {}'.format(len(train_images)))
@@ -127,15 +125,16 @@ if __name__ == '__main__':
     
     net = None
     weights = None # pretrained weights
-    if args['net'] == "AlexNet":
-        net = AlexNet(cfg)
-        weights = "models/pretrained/alexnet_weights.h5"
-        
-    elif args['net'] == "VGG16":
+    if args['net'] == "VGG16":
         if techno == "FT":
             net = VGG16_FT(cfg)
+            
         elif techno == "DLBHC":
             net = VGG16_DLBHC(cfg, args["num_bits"])
+            
+        elif techno == "SSDH":
+            net = VGG16_SSDH(cfg, args["num_bits"])
+            
         weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"
         
     assert net != None, \
@@ -147,7 +146,6 @@ if __name__ == '__main__':
     # launch train process
     root_dir = cfg.MAIN_DIR_ROOT
     output_dir = dataset.built_output_dir(root_dir, 'train', args["net"])
-    cache_im_dir = osp.join(root_dir, args['cache_im_dir'])
     
     print ('[INFO] Start the training process on {}'.format(args["dataset"]))
     max_epochs = args['epochs']    

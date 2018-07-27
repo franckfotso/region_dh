@@ -53,7 +53,7 @@ class CIFAR10(Dataset):
         train_images, val_images = ([],[])
         train_labels, val_labels = ([],[])
         
-        cache_images_file = osp.join(self.cfg.MAIN_DIR_ROOT, "cache","cifar10_images.pkl")
+        cache_images_file = osp.join(self.cfg.MAIN_DIR_ROOT, "cache",self.name+"_images.pkl")
         if osp.exists(cache_images_file):
             with open(cache_images_file,'rb') as fp:
                 (train_images, val_images), (train_labels, val_labels) = pickle.load(fp)

@@ -80,6 +80,8 @@ class Config(object):
             self.cfg.MAIN_DEFAULT_TECHNOS = self.load_param("MAIN.DEFAULT", "TECHNOS","list")
             self.cfg.MAIN_DEFAULT_DATASETS = self.load_param("MAIN.DEFAULT", "DATASETS","list")
             self.cfg.MAIN_DEFAULT_EXT = self.load_param("MAIN.DEFAULT", "EXT", "list")
+            self.cfg.MAIN_DEFAULT_CORES = self.load_param("MAIN.DEFAULT", "CORES", "int")
+            
             ''' 
                 MAIN.DIR
             '''
@@ -162,6 +164,9 @@ class Config(object):
                 TRAIN.BATCH.CFC
             '''
             self.cfg.TRAIN_BATCH_CFC_NUM_IMG = self.load_param("TRAIN.BATCH.CFC", "NUM_IMG", "int")
+            self.cfg.TRAIN_BATCH_CFC_ALPHA = self.load_param("TRAIN.BATCH.CFC", "ALPHA", "float")
+            self.cfg.TRAIN_BATCH_CFC_BETA = self.load_param("TRAIN.BATCH.CFC", "BETA", "float")
+            self.cfg.TRAIN_BATCH_CFC_GAMMA = self.load_param("TRAIN.BATCH.CFC", "GAMMA", "float")
             
             ''' 
                 TRAIN.BATCH.DET

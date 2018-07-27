@@ -15,3 +15,9 @@ def chi2_distance(vec_A, vec_B, eps=1e-10):
 
     # return the chi-squared distance
     return d
+
+def euclidean_dist(vec_A, vec_B):
+    # compute the euclidean distance
+    d = np.sqrt(np.sum(np.square(np.subtract(vec_A, vec_B))))
+    
+    return d

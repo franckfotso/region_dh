@@ -1,5 +1,5 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Project: Region-DH
+# Project: CBIR-360
 # Module: libs.main.SolverWrapper
 # Copyright (c) 2018
 # Written by: Franck FOTSO
@@ -38,27 +38,6 @@ class SolverWrapper(object):
         self.tb_dir = tb_dir
         self.output_dir = output_dir
         self.cfg = cfg
-        
-        """
-        if cfg.MAIN_DEFAULT_TASK == "DET" and cfg.TRAIN_DEFAULT_BBOX_REG:
-            cache_dir = osp.join(cfg.MAIN_DIR_ROOT,cfg.MAIN_DIR_CACHE)
-            means_file = osp.join(cache_dir,'{}_bbox_means.npy'\
-                                   .format(cfg.TRAIN_DEFAULT_SEGM_METHOD))
-            stds_file = osp.join(cache_dir, '{}_bbox_stds.npy'\
-                                   .format(cfg.TRAIN_DEFAULT_SEGM_METHOD))
-            #print 'means_file: {}'.format(means_file)
-            #print 'stds_file: {}'.format(stds_file)
-            
-            if os.path.exists(means_file) and os.path.exists(stds_file):
-                self.bbox_means = np.load(means_file)
-                self.bbox_stds = np.load(stds_file)
-            else:
-                print ('[INFO] SolverWrapper: compute bbox means & stds over the train set...')
-                self.bbox_means, self.bbox_stds = compute_bbox_means_stds(train_gen.cache_im_dir, 
-                                                                          train_gen.num_cls, cfg)                                                                
-            self.data_gen.bbox_means = self.bbox_means
-            self.data_gen.bbox_stds = self.bbox_stds
-        """ 
 
     def train_model(self, sess, max_iters):
         """train a model, with snapshots and summaries"""
@@ -92,13 +71,23 @@ class SolverWrapper(object):
         snapshot_iters = iters_per_epoch*self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS
         
         assert snapshot_iters < max_iters, \
-        "snapshot_iters must be very lower than max_iters, got: [{},{}]".format(snapshot_iters, max_iters)
+        "snapshot_iters must be very small than max_iters, got: [{},{}]".format(snapshot_iters, max_iters)
         
         while iter < max_iters + 1:
+            epoch = iter*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+            epoch = epoch/len(self.train_gen.images)
+            
             # Learning rate
             if iter == next_stepsize + 1:
                 # Add snapshot here before reducing the learning rate
-                self.snapshot(sess, iter)
+                
+                blobs_val = self.val_gen.get_next_minibatch()
+                outputs = self.net.train_step(sess, blobs_val, train_op)
+                val_acc = outputs["accuracies"]["acc_cls"]
+                
+                #self.snapshot(sess, iter)
+                self.snapshot(sess, iter, val_acc)
+                
                 rate *= self.cfg.TRAIN_DEFAULT_GAMMA
                 sess.run(tf.assign(lr, rate))
                 next_stepsize = stepsizes.pop()
@@ -106,15 +95,13 @@ class SolverWrapper(object):
             timer.tic()
             # Get training data, one batch at a time
             blobs = self.train_gen.get_next_minibatch()
-            
-            epoch = iter*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
-            epoch = epoch/len(self.train_gen.images)
 
             now = time.time()
             if iter == 1 or now - last_summary_time > self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL:
                 # Compute the graph with summary
-                total_loss, loss_cls, acc_cls, summary = self.net.train_step_with_summary(sess, 
-                                                                              blobs, train_op)
+                outputs = self.net.train_step_with_summary(sess, blobs, train_op)
+                summary = outputs["summary"]
+                
                 #self.writer.add_summary(summary, float(iter)) # by iter
                 self.writer.add_summary(summary, float(epoch)) # by epoch
 
@@ -127,34 +114,67 @@ class SolverWrapper(object):
                 last_summary_time = now
             else:
                 # Compute the graph without summary
-                total_loss, loss_cls, acc_cls = self.net.train_step(sess, blobs, train_op)
-            timer.toc()
-
-            # Display training information
-
-            if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
-                """
-                # based on iters
-                print('iter: %d / %d, loss_cls: %.6f, acc_cls: %.6f\n >>> lr: %f' % \
-                      (iter, max_iters, loss_cls, acc_cls, lr.eval()))
-                """
+                outputs = self.net.train_step(sess, blobs, train_op)                                
+                    
+            timer.toc()            
+            
+            """ Get outputs based on techno """
+            if self.techno in ["FT", "DLBHC", "TLOSS2"]:
+                # get classification outputs
+                loss_cls     = outputs["losses"]["loss_cls"]
+                acc_cls      = outputs["accuracies"]["acc_cls"]
+            
+            elif self.techno in ["SSDH"]:
+                # get classification and encoding outputs
+                loss_E1     = outputs["losses"]["loss_E1"]
+                loss_E2     = outputs["losses"]["loss_E2"]
+                loss_E3     = outputs["losses"]["loss_E3"]
+                acc_cls      = outputs["accuracies"]["acc_cls"]
                 
-                # based on epochs
-                print("epoch: {:.3f}/{:.3f} | total_loss: {:.6f}".\
-                      format(epoch, max_epochs, total_loss))
-                print(" >>> loss_cls: {:.6f} \n >>> acc_cls: {:.6f} \n >>> lr: {:.6f}".\
-                      format(loss_cls, acc_cls, lr.eval()))
+            elif self.techno in ["TLOSS1", "TLOSS2"]:
+                triplet_loss = outputs["losses"]["triplet_loss"]
+            else:
+                raise NotImplemented
+            total_loss   = outputs["losses"]["total_loss"]            
+            
+            # Display training information
+            if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
+                max_steps = iters_per_epoch
+                cur_step = iter - int(epoch)*max_steps
+                
+                # based on epochs & steps
+                print("epochs: [{}/{}], steps: [{}/{}] | total_loss: {:.6f}".\
+                      format(int(epoch)+1, int(max_epochs), cur_step, max_steps, total_loss))
+                
+                if self.techno in ["FT", "DLBHC", "TLOSS2"]:
+                    print(" >>> loss_cls: {:.6f} \n >>> acc_cls: {:.6f}".\
+                      format(loss_cls, acc_cls))
+                
+                elif self.techno in ["SSDH"]:
+                    print(" >>> loss_E1: {:.6f} \n >>> loss_E2: {:.6f} \n >>> loss_E3: {:.6f} \n >>> acc_cls: {:.6f}".\
+                      format(loss_E1, loss_E2, loss_E3, acc_cls))
+                    
+                elif self.techno in ["TLOSS1", "TLOSS2"]:
+                    print(" >>> triplet_loss: {:.6f}".format(triplet_loss))
+                    
+                print(" >>> lr: {:.6f}".format(lr.eval()))
+                
                 print("max_iters: {} \nsnapshot_iters: {}".format(max_iters, snapshot_iters))
                 print("speed: {:.3f}s / iter".format(timer.average_time))
                 print("----------------------------")
     
-            # Snapshotting           
-        
+            # Snapshotting       
             #if iter % self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS == 0: snapshot_iters
             if iter % snapshot_iters == 0:
                 print("Snapshotting iter. {}...".format(iter))
+                
+                blobs_val = self.val_gen.get_next_minibatch()
+                outputs = self.net.train_step(sess, blobs_val, train_op)
+                val_acc = outputs["accuracies"]["acc_cls"]
+                
                 last_snapshot_iter = iter
-                ss_path, np_path = self.snapshot(sess, iter)
+                #ss_path, np_path = self.snapshot(sess, iter)
+                ss_path, np_path = self.snapshot(sess, iter, val_acc)
                 np_paths.append(np_path)
                 ss_paths.append(ss_path)
     
@@ -165,7 +185,11 @@ class SolverWrapper(object):
             iter += 1
     
         if last_snapshot_iter != iter - 1:
-            self.snapshot(sess, iter - 1)
+            blobs_val = self.val_gen.get_next_minibatch()
+            outputs = self.net.train_step(sess, blobs_val, train_op)
+            val_acc = outputs["accuracies"]["acc_cls"]
+                
+            self.snapshot(sess, iter - 1, val_acc)
     
         self.writer.close()
         self.valwriter.close()
@@ -173,6 +197,9 @@ class SolverWrapper(object):
         
     def find_previous(self):
         sfiles = os.path.join(self.output_dir, self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_*.ckpt.meta')
+        #print("self.output_dir: ", self.output_dir)
+        #print("self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX: ", self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX )
+        
         sfiles = glob.glob(sfiles)
         sfiles.sort(key=os.path.getmtime)
         # Get the snapshot name in TensorFlow
@@ -289,7 +316,15 @@ class SolverWrapper(object):
                         final_gvs.append((grad, var))
                 train_op = self.optimizer.apply_gradients(final_gvs)
             else:
-                train_op = self.optimizer.apply_gradients(gvs)
+                if self.techno in ["SSDH"]:
+                    with tf.variable_scope('Gradient_Mult') as scope:
+                        for grad, var in gvs:
+                            #print("grad_var: ", var)
+                            pass
+                            
+                    train_op = self.optimizer.apply_gradients(gvs)
+                else:
+                    train_op = self.optimizer.apply_gradients(gvs)
             
             # We will handle the snapshots ourselves
             self.saver = tf.train.Saver(max_to_keep=100000)
@@ -308,20 +343,22 @@ class SolverWrapper(object):
     
         return lr, train_op
     
-    def snapshot(self, sess, iter):
+    def snapshot(self, sess, iter, val_acc):
         net = self.net
         
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         
         # Store the model snapshot
-        filename = self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}'.format(iter) + '.ckpt'
+        #filename = self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}'.format(iter) + '.ckpt'
+        filename = self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}_acc_{:.3f}'.format(iter, val_acc) + '.ckpt'
         filename = os.path.join(self.output_dir, filename)
         self.saver.save(sess, filename)
         print('Wrote snapshot to: {:s}'.format(filename))
         
         # Also store some meta information, random state, etc.
-        nfilename = self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}'.format(iter) + '.pkl'
+        #nfilename = self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}'.format(iter) + '.pkl'
+        nfilename = self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}_acc_{:.3f}'.format(iter, val_acc) + '.pkl'
         nfilename = os.path.join(self.output_dir, nfilename)
         # current state of numpy random
         st0 = np.random.get_state()

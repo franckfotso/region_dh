@@ -224,7 +224,5 @@ class VGG16_DLBHC(VGG16):
                                                               self._losses['loss_cls'],
                                                               self._accuracies['acc_cls'],
                                                               self._summary_op, train_op], feed_dict=feed_dict)        
-        return total_loss, loss_cls, acc_cls, summary 
-    
-    
+        return total_loss, loss_cls, acc_cls, summary    
     
