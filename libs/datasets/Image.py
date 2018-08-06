@@ -15,26 +15,24 @@ class Image(BasicInput):
                  pathname,
                  im_RAW=None,
                  label=None,
-                 gt_rois=None,
-                 pr_rois=None,
+                 rois=None,
                  flipped=False
                  ):
-        self._gt_rois = gt_rois
-        self._pr_rois = pr_rois
+        self.rois = rois
         self._flipped = flipped
         
         super(Image, self).__init__(filename, pathname, im_RAW, label)
 
     def get_flipped(self):
-        return self.__flipped
+        return self._flipped
 
 
     def set_flipped(self, value):
-        self.__flipped = value
+        self._flipped = value
 
 
     def del_flipped(self):
-        del self.__flipped
+        del self._flipped
 
 
     def get_pr_rois(self):

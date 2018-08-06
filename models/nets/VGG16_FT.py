@@ -1,6 +1,6 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Project: Region-DH
-# Module: models.nets.finetuning
+# Module: models.nets.VGG16_FT
 # Copyright (c) 2018
 # Written by: Franck FOTSO
 # Based on: tf-faster-rcnn 

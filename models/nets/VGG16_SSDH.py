@@ -1,6 +1,6 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Project: Region-DH
-# Module: models.nets.dlbhc
+# Module: models.nets.VGG16_SSDH
 # Copyright (c) 2018
 # Written by: Franck FOTSO
 # Based on: tf-faster-rcnn 
@@ -18,6 +18,8 @@ from tensorflow.contrib.slim import arg_scope
 
 from nets.VGG16 import VGG16
 
+from faster_rcnn import layers
+
 class VGG16_SSDH(VGG16):
     
     def __init__(self, cfg, num_bits, multilabel=False):
@@ -33,6 +35,8 @@ class VGG16_SSDH(VGG16):
         self._score_summaries = {}
         self._train_summaries = []
         self._event_summaries = {}
+        self._loss_summaries = {}
+        self._acc_summaries = {}
         self._variables_to_fix = {}
         self.multilabel = multilabel
         self.alpha = cfg.TRAIN_BATCH_CFC_ALPHA
@@ -46,16 +50,19 @@ class VGG16_SSDH(VGG16):
         testing = mode == 'TEST'
         
         if training:
-            # mode: TRAIN
-            self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])
+            # mode: TRAIN    
             
             if self.multilabel:
-                self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, num_classes])
+                self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_DET_IMS_PER_BATCH, None, None, 3])
+                self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_DET_IMS_PER_BATCH, num_classes-1])
+                self._pos_weights = tf.placeholder(tf.float32, 
+                                                   shape=[self.cfg.TRAIN_BATCH_DET_IMS_PER_BATCH, num_classes-1])
             else:
+                self._images = tf.placeholder(tf.float32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, None, None, 3])
                 self._labels = tf.placeholder(tf.int32, shape=[self.cfg.TRAIN_BATCH_CFC_NUM_IMG, 1])
         else:
             # mode: TEST
-            self._images = tf.placeholder(tf.float32, shape=[self.cfg.TEST_BATCH_CFC_NUM_IMG, None, None, 3])            
+            self._images = tf.placeholder(tf.float32, shape=[self.cfg.TEST_BATCH_CFC_NUM_IMG, None, None, 3])           
         
         self._tag = tag    
         self._num_classes = num_classes
@@ -87,10 +94,20 @@ class VGG16_SSDH(VGG16):
             layers_to_output.update(self._losses)
             
             val_summaries = []
-            with tf.device("/cpu:0"):                
+            with tf.device("/cpu:0"):
+                """
                 for key, var in self._event_summaries.items():
                     #print("key: {}, var: {}".format(key, var))
                     val_summaries.append(tf.summary.scalar(key, var))
+                """    
+                #""" 
+                for key, var in self._loss_summaries.items():
+                    # add loss to summary
+                    val_summaries.append(self._add_loss_summary(key, var))
+                for key, var in self._acc_summaries.items():
+                    # add acc to summary
+                    val_summaries.append(self._add_acc_summary(key, var))
+                #"""     
                 for key, var in self._score_summaries.items():
                     self._add_score_summary(key, var)
                 for var in self._act_summaries:
@@ -107,8 +124,11 @@ class VGG16_SSDH(VGG16):
     
     
     def _build_network(self, is_training=True):        
-        pool5 = self._image_to_head(is_training)    
-        fc7 = self._head_to_tail(pool5, is_training)
+        pool5 = self._image_to_head(is_training, last_pool=True)
+        print("pool5.shape: ", pool5.shape)
+        #fc7 = self._head_to_tail(pool5, is_training)
+        fc7 = self._head_to_tail(pool5, is_training, global_pool="MEAN")
+        print("fc7.shape: ", fc7.shape)
         
         if not is_training:
             self._predictions["fc7"] = tf.reshape(fc7, [fc7.shape[0],-1])
@@ -118,7 +138,8 @@ class VGG16_SSDH(VGG16):
             fc_emb = self._image_encoding(fc7, is_training)
             
             # image classification
-            cls_prob, cls_pred = self._image_classification(fc_emb, is_training)
+            cls_prob, cls_pred = self._image_classification(fc_emb, is_training, self.cfg.TEST_DEFAULT_CFC_THRESH)
+            #cls_prob, cls_pred = self._image_classification(fc7, is_training, self.cfg.TEST_DEFAULT_CFC_THRESH) # DEBUG
     
         self._score_summaries.update(self._predictions)
     
@@ -141,20 +162,28 @@ class VGG16_SSDH(VGG16):
         
         return fc_emb
     
-    def _image_classification(self, net, is_training, threshold=0.5):
+    def _image_classification(self, net, is_training, threshold=0.3):
         # net.layers[-1]: fc hash
         initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
-        
-        cls_score = slim.conv2d(net, self._num_classes, [1, 1],
+        num_cls = self._num_classes if not self.multilabel else self._num_classes-1
+        """
+        cls_score = slim.conv2d(net, self._num_classes-1, [1, 1],
                           weights_initializer=initializer,
                           trainable=is_training,
                           activation_fn=None, scope='cls_score')
-        cls_score = tf.reshape(cls_score, [cls_score.shape[0],-1])
+        """
+        cls_score = slim.fully_connected(net, self._num_classes-1, 
+                              weights_initializer=initializer,
+                              trainable=is_training,
+                              activation_fn=None,
+                              scope='cls_score')        
+        print("cls_score.shape: ", cls_score.shape)
         
         if self.multilabel:
             cls_prob = tf.nn.sigmoid(cls_score, name="cls_prob")
-            cls_pred = tf.round(cls_prob)
-            cls_pred = tf.reshape(cls_pred, [-1, self._num_classes])
+            cls_prob = tf.reshape(cls_prob, [cls_prob.shape[0], num_cls])
+            cls_pred = tf.to_int32((cls_prob >= threshold))
+            cls_pred = tf.reshape(cls_pred, [cls_prob.shape[0], num_cls])
         else:
             # single-label
             cls_prob = tf.nn.softmax(cls_score, name="cls_prob")
@@ -172,32 +201,13 @@ class VGG16_SSDH(VGG16):
         
         fc_emb = self._predictions["fc_emb"]
         fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
-        
-        #num_bits = fc_emb.shape[-1]
-        #print("fc_emb.shape: ", fc_emb.shape)
-        
+                
         _cal = tf.subtract(fc_emb, 0.5)        
         _cal = tf.multiply(_cal, _cal)
-        #_cal = tf.sqrt(_cal)
         _cal = tf.reduce_mean(_cal, 1)
         loss = tf.reduce_mean(_cal, 0)*(-1)
         
         return tf.scalar_mul(weights, loss)
-    
-    
-    def k1_euclidean_grad(self, norm_order=2, weights=1.0):
-        """ forcing binary: gradients """
-        
-        fc_emb = self._predictions["fc_emb"]
-        fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
-        
-        _cal = tf.subtract(fc_emb, 0.5) 
-        _cal = tf.multiply(tf.sign(_cal), _cal)
-        _cal = tf.reduce_mean(_cal, 1) 
-        _cal = tf.reduce_mean(_cal, 0)
-        grad = (_cal/norm_order)*(-1)
-        
-        return tf.scalar_mul(weights, grad)
         
     
     def k2_euclidean_loss(self, norm_order=1, weights=1.0):
@@ -206,43 +216,43 @@ class VGG16_SSDH(VGG16):
         fc_emb = self._predictions["fc_emb"]
         fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
        
-        fc_avg = tf.reduce_mean(fc_emb, 1)
-        
+        fc_avg = tf.reduce_mean(fc_emb, 1)        
         _cal = tf.subtract(fc_avg, 0.5)      
         _cal = tf.multiply(_cal, _cal)
-        #_cal = tf.sqrt(_cal)
         loss = tf.reduce_mean(_cal, 0)
         
         return tf.scalar_mul(weights, loss)
-    
-    def k2_euclidean_grad(self, norm_order=2, weights=1.0):
-        """ 50% fire for each bit: gradients """
-        
-        fc_emb = self._predictions["fc_emb"]
-        fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
-        
-        fc_avg = tf.reduce_mean(fc_emb, 1)
-        
-        _cal = tf.subtract(fc_avg, 0.5) 
-        _cal = tf.multiply(tf.sign(_cal), _cal)
-        _cal = tf.reduce_mean(_cal, 0)
-        grad = _cal/norm_order
-        
-        return tf.scalar_mul(weights, grad)
     
     
     def _add_losses(self):
         with tf.variable_scope('LOSS_' + self._tag) as scope:
             
             """ classification loss: E1 """
-            cls_score = self._predictions["cls_score"]          
+            cls_score = self._predictions["cls_score"]            
             labels = self._labels
+            
+            cls_score = tf.reshape(cls_score, [cls_score.shape[0], -1])
+            labels = tf.reshape(labels, [labels.shape[0], -1])
+            print("cls_score.shape: ", cls_score.shape)
+            print("labels.shape: ", labels.shape)
                         
             if self.multilabel:
-                labels = tf.reshape(labels, [-1, self._num_classes])
-                loss_E1 = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=cls_score, 
-                                                                         multi_class_labels=labels,
-                                                                         weights=self.alpha))
+                #labels = tf.reshape(labels, [-1, self._num_classes-1])
+                pos_weights = tf.reshape(self._pos_weights, [self._pos_weights.shape[0], -1])                
+                #print("pos_weights.shape: ", pos_weights.shape)
+                
+                pos_weight = pos_weights[:,0]
+                pos_weight = tf.reshape(pos_weight, [pos_weight.shape[0], -1])
+                print("pos_weight.shape: ", pos_weight.shape)
+                #"""
+                loss_E1 = tf.nn.weighted_cross_entropy_with_logits(logits=cls_score,
+                                                                   targets=tf.to_float(labels),
+                                                                   pos_weight=pos_weight) # try 1, 2, 3
+                                                                   #pos_weight=pos_weights) # try 4, 5, 6
+                loss_E1 = self.alpha*tf.reduce_mean(loss_E1)
+                #"""
+                
+                tf.losses.add_loss(loss_E1)
             else:
                 labels = tf.reshape(labels, [-1])
                 loss_E1 = tf.losses.sparse_softmax_cross_entropy(logits=cls_score, 
@@ -260,29 +270,33 @@ class VGG16_SSDH(VGG16):
             tf.losses.add_loss(loss_E3)
             self._losses['loss_E3'] = loss_E3           
             
-            """ overall loss: E1 + E2 + E3 + regu """
-            # apha, beta, & gamma are hyperparameters balancing the total loss
-            #regu_loss = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
-            #self._losses['total_loss'] = loss_E1 + loss_E2 + loss_E3 + regu_loss
-            
+            """ overall loss: E1 + E2 + E3 + regu """            
             self._losses['total_loss'] = tf.losses.get_total_loss()
                        
             self._event_summaries.update(self._losses)
+            self._loss_summaries.update(self._losses)
             
             # Evaluation metrics
-            cls_pred = tf.to_int32(self._predictions["cls_pred"])
-            acc_cls = tf.contrib.metrics.accuracy(predictions=cls_pred, labels=labels, name="acc_cls")
+            cls_pred =self._predictions["cls_pred"]
             
-            #print("cls_pred.shape: ", cls_pred.shape)
-            #print("labels.shape: ", labels.shape)
-            """
-            acc_cls = tf.equal(cls_pred, labels)
-            acc_cls = tf.reduce_mean(tf.cast(acc_cls, tf.float32))            
-            """
-            self._accuracies['acc_cls'] = acc_cls
+            if self.multilabel:
+                print("labels.shape: ", labels.shape)
+                print("cls_pred.shape: ", cls_pred.shape)
+                acc_cls, precision, recall = layers._precision_recall_score(labels, cls_pred, "prec_rec_score")
+            else:
+                acc_cls = tf.contrib.metrics.accuracy(predictions=cls_pred, labels=labels, name="acc_cls")
             
+            self._accuracies['acc_cls'] = acc_cls            
             self._event_summaries.update(self._accuracies)
+            self._acc_summaries.update(self._accuracies)
     
+    
+    def _add_loss_summary(self, key, var):
+        return tf.summary.scalar('LOSS/' + key, var)        
+        
+    def _add_acc_summary(self, key, var):
+        return tf.summary.scalar('ACC/' + key, var)
+        
     
     def _add_act_summary(self, tensor):
         tf.summary.histogram('ACT/' + tensor.op.name + '/activations', tensor)
@@ -298,9 +312,12 @@ class VGG16_SSDH(VGG16):
         tf.summary.histogram('TRAIN/' + var.op.name, var)
         
     def get_summary(self, sess, blobs):
-        feed_dict = {self._images: blobs['data'], self._labels: blobs['labels']}
-        summary = sess.run(self._summary_op_val, feed_dict=feed_dict)
-    
+        feed_dict = {self._images: blobs['data'], 
+                     self._labels: blobs['labels']}
+        if self.multilabel:
+            feed_dict[self._pos_weights] = blobs['pos_weights']
+            
+        summary = sess.run(self._summary_op_val, feed_dict=feed_dict)    
         return summary
     
     # only useful during testing mode
@@ -317,13 +334,18 @@ class VGG16_SSDH(VGG16):
     
     
     def train_step(self, sess, blobs, train_op):
-        feed_dict = {self._images: blobs['data'], self._labels: blobs['labels']}
-        total_loss, loss_E1, loss_E2, loss_E3, acc_cls, _ = sess.run([self._losses["total_loss"],
-                                                                         self._losses['loss_E1'],
-                                                                         self._losses['loss_E2'],
-                                                                         self._losses['loss_E3'],
-                                                                         self._accuracies['acc_cls'],
-                                                                         train_op], feed_dict=feed_dict)
+        feed_dict = {self._images: blobs['data'], 
+                     self._labels: blobs['labels']}
+        if self.multilabel:
+            feed_dict[self._pos_weights] = blobs['pos_weights']
+            
+        total_loss, loss_E1, loss_E2, \
+        loss_E3, acc_cls, _ = sess.run([self._losses["total_loss"],
+                                         self._losses['loss_E1'],
+                                         self._losses['loss_E2'],
+                                         self._losses['loss_E3'],
+                                         self._accuracies['acc_cls'],
+                                         train_op], feed_dict=feed_dict)
     
         return {"losses": {"total_loss": total_loss, "loss_E1": loss_E1, "loss_E2": loss_E2, "loss_E3": loss_E3},
                 "accuracies": {"acc_cls": acc_cls}}
@@ -331,17 +353,20 @@ class VGG16_SSDH(VGG16):
             
         
     def train_step_with_summary(self, sess, blobs, train_op):
-        feed_dict = {self._images: blobs['data'], self._labels: blobs['labels']}
-        total_loss, loss_E1, loss_E2, loss_E3, acc_cls, summary, _ = sess.run([self._losses["total_loss"],
-                                                                              self._losses['loss_E1'],
-                                                                              self._losses['loss_E2'],
-                                                                              self._losses['loss_E3'],
-                                                                              self._accuracies['acc_cls'],
-                                                                              self._summary_op, train_op], feed_dict=feed_dict)
+        feed_dict = {self._images: blobs['data'], 
+                     self._labels: blobs['labels']}
+        if self.multilabel:
+            feed_dict[self._pos_weights] = blobs['pos_weights']
+            
+        total_loss, loss_E1, loss_E2, \
+        loss_E3, acc_cls, summary, _ = sess.run([self._losses["total_loss"],
+                                                  self._losses['loss_E1'],
+                                                  self._losses['loss_E2'],
+                                                  self._losses['loss_E3'],
+                                                  self._accuracies['acc_cls'],
+                                                  self._summary_op, train_op], feed_dict=feed_dict)
         
         return {"losses": {"total_loss": total_loss, "loss_E1": loss_E1, "loss_E2": loss_E2, "loss_E3": loss_E3},
                 "accuracies": {"acc_cls": acc_cls},
-                "summary": summary }
-    
-    
+                "summary": summary }    
     

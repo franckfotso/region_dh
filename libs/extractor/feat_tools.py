@@ -70,9 +70,13 @@ def tf_batch_feat(im_pns, sess, net, techno, cfg):
     
     _, _, _, fc_hash, fc7 = _batch_foward(sess, net, images, data_gen, cfg)
     
-    if techno in ["DLBHC", "SSDH"]:
+    if techno in ["DLBHC"]:
         # apply a binary thresholding: 0.5
         binary_codes = np.where(fc_hash >= 0.5, 1, 0)
+        
+    elif techno in ["SSDH"]:
+        binary_codes = (np.sign(fc_hash - 0.5) + 1)/2
+    
     else:
         # thresholding already applied into the net
         binary_codes = fc_hash

@@ -1,6 +1,6 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Project: Region-DH
-# Module: models.nets.dlbhc
+# Module: models.nets.VGG16_DLBHC
 # Copyright (c) 2018
 # Written by: Franck FOTSO
 # Based on: tf-faster-rcnn 

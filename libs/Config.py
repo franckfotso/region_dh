@@ -134,31 +134,13 @@ class Config(object):
             self.cfg.TRAIN_DEFAULT_DISPLAY = self.load_param("TRAIN.DEFAULT", "DISPLAY","int")
             self.cfg.TRAIN_DEFAULT_SNAPSHOT_KEPT = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_KEPT","int")
             self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_PREFIX")
+            self.cfg.TRAIN_DEFAULT_USE_E2E_TF = self.load_param("TRAIN.DEFAULT", "USE_E2E_TF", "bool")
             
             self.cfg.TRAIN_DEFAULT_DEBUG = self.load_param("TRAIN.DEFAULT", "DEBUG", "bool")
-            self.cfg.TRAIN_DEFAULT_USE_FLIPPED = self.load_param("TRAIN.DEFAULT", "USE_FLIPPED", "bool")
-            #self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_ITERS", "int")
-            self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_EPOCHS", "int")
-            self.cfg.TRAIN_DEFAULT_ROI_METHOD = self.load_param("TRAIN.DEFAULT", "ROI_METHOD")              
+            self.cfg.TRAIN_DEFAULT_USE_FLIPPED = self.load_param("TRAIN.DEFAULT", "USE_FLIPPED", "bool")            
+            self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS = self.load_param("TRAIN.DEFAULT", "SNAPSHOT_EPOCHS", "int")                     
             self.cfg.TRAIN_DEFAULT_SCALES = self.load_param("TRAIN.DEFAULT", "SCALES","list","int")
             self.cfg.TRAIN_DEFAULT_MAX_SIZE = self.load_param("TRAIN.DEFAULT", "MAX_SIZE","int")
-            self.cfg.TRAIN_DEFAULT_ASPECT_GROUPING \
-                = self.load_param("TRAIN.DEFAULT", "ASPECT_GROUPING","bool")
-            self.cfg.TRAIN_DEFAULT_BBOX_NORMALIZE_TARGETS \
-                = self.load_param("TRAIN.DEFAULT", "BBOX_NORMALIZE_TARGETS","bool")
-            self.cfg.TRAIN_DEFAULT_BBOX_INSIDE_WEIGHTS \
-                = self.load_param("TRAIN.DEFAULT", "BBOX_INSIDE_WEIGHTS","list","float")
-            self.cfg.TRAIN_DEFAULT_BBOX_REG = self.load_param("TRAIN.DEFAULT", "BBOX_REG","bool")
-            self.cfg.TRAIN_DEFAULT_BBOX_NORMALIZE_TARGETS_PRECOMPUTED \
-                = self.load_param("TRAIN.DEFAULT", "BBOX_NORMALIZE_TARGETS_PRECOMPUTED","bool")
-            self.cfg.TRAIN_DEFAULT_BBOX_NORMALIZE_MEANS \
-                = self.load_param("TRAIN.DEFAULT", "BBOX_NORMALIZE_MEANS","list","float")
-            self.cfg.TRAIN_DEFAULT_BBOX_NORMALIZE_STDS \
-                = self.load_param("TRAIN.DEFAULT", "BBOX_NORMALIZE_STDS","list","float")
-            self.cfg.TRAIN_DEFAULT_BBOX_THRESH = self.load_param("TRAIN.DEFAULT", "BBOX_THRESH","float")
-            self.cfg.TRAIN_DEFAULT_ROI_FG_THRESH = self.load_param("TRAIN.DEFAULT", "ROI_FG_THRESH","float")            
-            self.cfg.TRAIN_DEFAULT_ROI_BG_THRESH_HI = self.load_param("TRAIN.DEFAULT", "ROI_BG_THRESH_HI","float")
-            self.cfg.TRAIN_DEFAULT_ROI_BG_THRESH_LO = self.load_param("TRAIN.DEFAULT", "ROI_BG_THRESH_LO","float")    
 
             ''' 
                 TRAIN.BATCH.CFC
@@ -171,13 +153,48 @@ class Config(object):
             ''' 
                 TRAIN.BATCH.DET
             '''
-            self.cfg.TRAIN_BATCH_DET_NUM_IMG = self.load_param("TRAIN.BATCH.DET", "NUM_IMG", "int")
-            self.cfg.TRAIN_BATCH_DET_NUM_ROI = self.load_param("TRAIN.BATCH.DET", "NUM_ROI", "int")
-            self.cfg.TRAIN_BATCH_DET_FRACTION_SAMPLE = self.load_param("TRAIN.BATCH.DET", "FRACTION_SAMPLE", "list", "float")
-            self.cfg.TRAIN_BATCH_DET_THRESH_LO_SAMPLE = self.load_param("TRAIN.BATCH.DET", "THRESH_LO_SAMPLE", "list", "float")
-            self.cfg.TRAIN_BATCH_DET_THRESH_HI_SAMPLE = self.load_param("TRAIN.BATCH.DET", "THRESH_HI_SAMPLE", "list", "float")
-                        
+            self.cfg.TRAIN_BATCH_DET_ASPECT_GROUPING = self.load_param("TRAIN.BATCH.DET", "ASPECT_GROUPING", "bool")
+            self.cfg.TRAIN_BATCH_DET_PROPOSAL_METHOD = self.load_param("TRAIN.BATCH.DET", "PROPOSAL_METHOD", "str")
+            self.cfg.TRAIN_BATCH_DET_HAS_RPN = self.load_param("TRAIN.BATCH.DET", "HAS_RPN", "bool")           
+            self.cfg.TRAIN_BATCH_DET_RPN_POSITIVE_OVERLAP = self.load_param("TRAIN.BATCH.DET", "RPN_POSITIVE_OVERLAP", "float")
+            self.cfg.TRAIN_BATCH_DET_RPN_NEGATIVE_OVERLAP = self.load_param("TRAIN.BATCH.DET", "RPN_NEGATIVE_OVERLAP", "float")
+            self.cfg.TRAIN_BATCH_DET_RPN_FG_FRACTION = self.load_param("TRAIN.BATCH.DET", "RPN_FG_FRACTION", "float")
+            self.cfg.TRAIN_BATCH_DET_RPN_BATCHSIZE = self.load_param("TRAIN.BATCH.DET", "RPN_BATCHSIZE", "int")
+            self.cfg.TRAIN_BATCH_DET_RPN_NMS_THRESH = self.load_param("TRAIN.BATCH.DET", "RPN_NMS_THRESH", "float")
+            self.cfg.TRAIN_BATCH_DET_RPN_PRE_NMS_TOP_N = self.load_param("TRAIN.BATCH.DET", "RPN_PRE_NMS_TOP_N", "int")
+            self.cfg.TRAIN_BATCH_DET_RPN_POST_NMS_TOP_N = self.load_param("TRAIN.BATCH.DET", "RPN_POST_NMS_TOP_N", "int")
+            self.cfg.TRAIN_BATCH_DET_RPN_POSITIVE_WEIGHT = self.load_param("TRAIN.BATCH.DET", "RPN_POSITIVE_WEIGHT", "float")
+            self.cfg.TRAIN_BATCH_DET_USE_ALL_GT = self.load_param("TRAIN.BATCH.DET", "USE_ALL_GT", "bool")
+            self.cfg.TRAIN_BATCH_DET_POOLING_SIZE = self.load_param("TRAIN.BATCH.DET", "POOLING_SIZE", "int")
+            self.cfg.TRAIN_BATCH_DET_ANCHOR_SCALES = self.load_param("TRAIN.BATCH.DET", "ANCHOR_SCALES", "list", "int")
+            self.cfg.TRAIN_BATCH_DET_ANCHOR_RATIOS = self.load_param("TRAIN.BATCH.DET", "ANCHOR_RATIOS", "list", "float")
+            self.cfg.TRAIN_BATCH_DET_RPN_CHANNELS = self.load_param("TRAIN.BATCH.DET", "RPN_CHANNELS", "int")
             
+            self.cfg.TRAIN_BATCH_DET_IMS_PER_BATCH = self.load_param("TRAIN.BATCH.DET", "IMS_PER_BATCH", "int")
+            self.cfg.TRAIN_BATCH_DET_BATCH_SIZE = self.load_param("TRAIN.BATCH.DET", "BATCH_SIZE", "int")
+            self.cfg.TRAIN_BATCH_DET_FG_FRACTION = self.load_param("TRAIN.BATCH.DET", "FG_FRACTION", "float")
+            self.cfg.TRAIN_BATCH_DET_FG_THRESH = self.load_param("TRAIN.BATCH.DET", "FG_THRESH", "float")
+            self.cfg.TRAIN_BATCH_DET_BG_THRESH_HI = self.load_param("TRAIN.BATCH.DET", "BG_THRESH_HI", "float")
+            self.cfg.TRAIN_BATCH_DET_BG_THRESH_LO = self.load_param("TRAIN.BATCH.DET", "BG_THRESH_LO", "float")
+            
+            self.cfg.TRAIN_BATCH_DET_BBOX_REG = self.load_param("TRAIN.BATCH.DET", "BBOX_REG","bool")
+            self.cfg.TRAIN_BATCH_DET_BBOX_THRESH = self.load_param("TRAIN.BATCH.DET", "BBOX_THRESH","float")            
+            self.cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_TARGETS \
+                = self.load_param("TRAIN.BATCH.DET", "BBOX_NORMALIZE_TARGETS","bool")
+            self.cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_TARGETS_PRECOMPUTED \
+                = self.load_param("TRAIN.BATCH.DET", "BBOX_NORMALIZE_TARGETS_PRECOMPUTED","bool")
+            self.cfg.TRAIN_BATCH_DET_BBOX_INSIDE_WEIGHTS \
+                = self.load_param("TRAIN.BATCH.DET", "BBOX_INSIDE_WEIGHTS","list","float")           
+            self.cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_MEANS \
+                = self.load_param("TRAIN.BATCH.DET", "BBOX_NORMALIZE_MEANS","list","float")
+            self.cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_STDS \
+                = self.load_param("TRAIN.BATCH.DET", "BBOX_NORMALIZE_STDS","list","float")
+            
+            self.cfg.TRAIN_BATCH_DET_ALPHAS = self.load_param("TRAIN.BATCH.DET", "ALPHAS", "list","float")
+            self.cfg.TRAIN_BATCH_DET_BETAS = self.load_param("TRAIN.BATCH.DET", "BETAS", "list","float")
+            self.cfg.TRAIN_BATCH_DET_GAMMAS_H1 = self.load_param("TRAIN.BATCH.DET", "GAMMAS_H1", "list","float")
+            self.cfg.TRAIN_BATCH_DET_GAMMAS_H2 = self.load_param("TRAIN.BATCH.DET", "GAMMAS_H2", "list","float")
+     
             ''' 
                 TRAIN.LAYER 
             '''
@@ -188,17 +205,20 @@ class Config(object):
             self.cfg.TEST_DEFAULT_DEBUG = self.load_param("TEST.DEFAULT", "DEBUG", "bool")
             self.cfg.TEST_DEFAULT_USE_FLIPPED = self.load_param("TEST.DEFAULT", "USE_FLIPPED", "bool")                 
             self.cfg.TEST_DEFAULT_SCALES = self.load_param("TEST.DEFAULT", "SCALES","list","int")
-            self.cfg.TEST_DEFAULT_ROI_MIN_SIZE = self.load_param("TEST.DEFAULT", "ROI_MIN_SIZE","int")
-            self.cfg.TEST_DEFAULT_TOP_K_PROPOSALS = self.load_param("TEST.DEFAULT", "TOP_K_PROPOSALS","int")
-            self.cfg.TEST_DEFAULT_GROUP_SCALE = self.load_param("TEST.DEFAULT", "GROUP_SCALE","int")
-            self.cfg.TEST_DEFAULT_MAX_ROIS_GPU = self.load_param("TEST.DEFAULT", "MAX_ROIS_GPU", "list","int")
+            self.cfg.TEST_DEFAULT_MAX_SIZE = self.load_param("TEST.DEFAULT", "MAX_SIZE", "int")
+            
+            self.cfg.TEST_DEFAULT_HAS_RPN = self.load_param("TEST.DEFAULT", "HAS_RPN", "bool")
+            self.cfg.TEST_DEFAULT_PROPOSAL_METHOD = self.load_param("TEST.DEFAULT", "PROPOSAL_METHOD")
             self.cfg.TEST_DEFAULT_NMS = self.load_param("TEST.DEFAULT", "NMS", "float")
-            self.cfg.TEST_DEFAULT_CONF_THRESH = self.load_param("TEST.DEFAULT", "CONF_THRESH", "float")
+            self.cfg.TEST_DEFAULT_RPN_NMS_THRESH = self.load_param("TEST.DEFAULT", "RPN_NMS_THRESH", "float")
+            self.cfg.TEST_DEFAULT_RPN_PRE_NMS_TOP_N = self.load_param("TEST.DEFAULT", "RPN_PRE_NMS_TOP_N", "int")
+            self.cfg.TEST_DEFAULT_RPN_POST_NMS_TOP_N = self.load_param("TEST.DEFAULT", "RPN_POST_NMS_TOP_N", "int")
+            self.cfg.TEST_DEFAULT_CFC_THRESH = self.load_param("TEST.DEFAULT", "CFC_THRESH", "float")
             
             ''' 
                 TEST.BATCH.CFC
             '''
-            self.cfg.TEST_BATCH_CFC_NUM_IMG = self.load_param("TEST.BATCH.CFC", "NUM_IMG", "int")
+            self.cfg.TEST_BATCH_CFC_NUM_IMG = self.load_param("TEST.BATCH.CFC", "NUM_IMG", "int")            
            
             ''' 
                 EVAL.DEFAULT

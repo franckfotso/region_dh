@@ -64,26 +64,41 @@ class SolverWrapper(object):
         next_stepsize = stepsizes.pop()
         
         # RFM
-        max_epochs = max_iters*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+        _batch_size = 1
+        if self.cfg.MAIN_DEFAULT_TASK == "CFC":
+            _batch_size = self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+        elif self.cfg.MAIN_DEFAULT_TASK == "DET":
+            _batch_size = self.cfg.TRAIN_BATCH_DET_IMS_PER_BATCH
+        else:
+            raise NotImplementedError
+            
+        max_epochs = max_iters*_batch_size
         max_epochs = max_epochs/len(self.train_gen.images)
         
-        iters_per_epoch = int(len(self.train_gen.images)/self.cfg.TRAIN_BATCH_CFC_NUM_IMG)+1
+        iters_per_epoch = int(len(self.train_gen.images)/_batch_size)+1
         snapshot_iters = iters_per_epoch*self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS
         
         assert snapshot_iters < max_iters, \
         "snapshot_iters must be very small than max_iters, got: [{},{}]".format(snapshot_iters, max_iters)
         
         while iter < max_iters + 1:
-            epoch = iter*self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+            epoch = iter*_batch_size
             epoch = epoch/len(self.train_gen.images)
             
             # Learning rate
             if iter == next_stepsize + 1:
                 # Add snapshot here before reducing the learning rate
-                
+                """
+                try:
+                except:
+                """
                 blobs_val = self.val_gen.get_next_minibatch()
                 outputs = self.net.train_step(sess, blobs_val, train_op)
-                val_acc = outputs["accuracies"]["acc_cls"]
+                
+                if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH"]:
+                    val_acc = outputs["accuracies"]["acc_cls"]
+                elif self.techno in ["Region-DH"]:
+                    val_acc = outputs["accuracies"]["im_acc_cls"]
                 
                 #self.snapshot(sess, iter)
                 self.snapshot(sess, iter, val_acc)
@@ -99,7 +114,7 @@ class SolverWrapper(object):
             now = time.time()
             if iter == 1 or now - last_summary_time > self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL:
                 # Compute the graph with summary
-                outputs = self.net.train_step_with_summary(sess, blobs, train_op)
+                outputs = self.net.train_step_with_summary(sess, blobs, train_op)               
                 summary = outputs["summary"]
                 
                 #self.writer.add_summary(summary, float(iter)) # by iter
@@ -107,14 +122,14 @@ class SolverWrapper(object):
 
                 # Also check the summary on the validation set
                 blobs_val = self.val_gen.get_next_minibatch()
-                summary_val = self.net.get_summary(sess, blobs_val)
+                summary_val = self.net.get_summary(sess, blobs_val)            
                 
                 #self.valwriter.add_summary(summary_val, float(iter)) # by iter
                 self.valwriter.add_summary(summary_val, float(epoch)) # by epoch
                 last_summary_time = now
             else:
-                # Compute the graph without summary
-                outputs = self.net.train_step(sess, blobs, train_op)                                
+                # Compute the graph without summary                
+                outputs = self.net.train_step(sess, blobs, train_op)
                     
             timer.toc()            
             
@@ -133,14 +148,33 @@ class SolverWrapper(object):
                 
             elif self.techno in ["TLOSS1", "TLOSS2"]:
                 triplet_loss = outputs["losses"]["triplet_loss"]
+                                
+            elif self.techno in ["Region-DH"]:
+                # get detection, classification and encoding outputs
+                L_reg1       = outputs["losses"]["L_reg1"]
+                L_reg2       = outputs["losses"]["L_reg2"]
+                L_cls1       = outputs["losses"]["L_cls1"]
+                L_cls2       = outputs["losses"]["L_cls2"]
+                L_cls3       = outputs["losses"]["L_cls3"]
+                L_H1_E1      = outputs["losses"]["L_H1_E1"]
+                L_H1_E2      = outputs["losses"]["L_H1_E2"]
+                L_H2_E1      = outputs["losses"]["L_H2_E1"]
+                L_H2_E2      = outputs["losses"]["L_H2_E2"]
+                im_acc_cls   = outputs["accuracies"]["im_acc_cls"]
+                bbox_acc_cls = outputs["accuracies"]["bbox_acc_cls"]
+                
             else:
                 raise NotImplemented
+                
             total_loss   = outputs["losses"]["total_loss"]            
             
             # Display training information
             if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
                 max_steps = iters_per_epoch
-                cur_step = iter - int(epoch)*max_steps
+                #cur_step = iter - int(epoch)*max_steps
+                cur_step = int(iter - epoch*max_steps)
+                if cur_step <= 0:
+                    cur_step = 0                    
                 
                 # based on epochs & steps
                 print("epochs: [{}/{}], steps: [{}/{}] | total_loss: {:.6f}".\
@@ -157,8 +191,10 @@ class SolverWrapper(object):
                 elif self.techno in ["TLOSS1", "TLOSS2"]:
                     print(" >>> triplet_loss: {:.6f}".format(triplet_loss))
                     
-                print(" >>> lr: {:.6f}".format(lr.eval()))
-                
+                elif self.techno in ["Region-DH"]:
+                    print(" >>> L_reg1: {:.6f} \n >>> L_reg2: {:.6f} \n >>> L_cls1: {:.6f} \n >>> L_cls2: {:.6f} \n >>> L_cls3: {:.6f} \n >>> L_H1_E1: {:.6f},  L_H1_E2: {:.6f} \n >>> L_H2_E1: {:.6f},  L_H2_E2: {:.6f} \n >>> bbox_acc_cls: {:.6f} >>> im_acc_cls: {:.6f}\n ".format(L_reg1, L_reg2, L_cls1, L_cls2, L_cls3, L_H1_E1, L_H1_E2, L_H2_E1, L_H2_E2, bbox_acc_cls, im_acc_cls))
+                    
+                print(" >>> lr: {:.6f}".format(lr.eval()))                
                 print("max_iters: {} \nsnapshot_iters: {}".format(max_iters, snapshot_iters))
                 print("speed: {:.3f}s / iter".format(timer.average_time))
                 print("----------------------------")
@@ -169,8 +205,12 @@ class SolverWrapper(object):
                 print("Snapshotting iter. {}...".format(iter))
                 
                 blobs_val = self.val_gen.get_next_minibatch()
-                outputs = self.net.train_step(sess, blobs_val, train_op)
-                val_acc = outputs["accuracies"]["acc_cls"]
+                outputs = self.net.train_step(sess, blobs_val, train_op)              
+                
+                if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH"]:
+                    val_acc = outputs["accuracies"]["acc_cls"]
+                elif self.techno in ["Region-DH"]:
+                    val_acc = outputs["accuracies"]["im_acc_cls"]
                 
                 last_snapshot_iter = iter
                 #ss_path, np_path = self.snapshot(sess, iter)
@@ -185,9 +225,13 @@ class SolverWrapper(object):
             iter += 1
     
         if last_snapshot_iter != iter - 1:
-            blobs_val = self.val_gen.get_next_minibatch()
+            blobs_val = self.val_gen.get_next_minibatch()   
             outputs = self.net.train_step(sess, blobs_val, train_op)
-            val_acc = outputs["accuracies"]["acc_cls"]
+           
+            if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH"]:
+                val_acc = outputs["accuracies"]["acc_cls"]
+            elif self.techno in ["Region-DH"]:
+                val_acc = outputs["accuracies"]["im_acc_cls"]
                 
             self.snapshot(sess, iter - 1, val_acc)
     
@@ -294,7 +338,13 @@ class SolverWrapper(object):
             # Set the random seed for tensorflow
             tf.set_random_seed( self.cfg.MAIN_DEFAULT_RNG_SEED)
             # Build the main computation graph
-            layers = self.net.create_architecture('TRAIN', self.dataset.num_cls, tag='default')
+            if self.techno in ["Region-DH"]:
+                layers = self.net.create_architecture('TRAIN', self.dataset.num_cls, tag='default',
+                                                      anchor_scales=self.cfg.TRAIN_BATCH_DET_ANCHOR_SCALES,
+                                                      anchor_ratios=self.cfg.TRAIN_BATCH_DET_ANCHOR_RATIOS)
+            else:
+                layers = self.net.create_architecture('TRAIN', self.dataset.num_cls, tag='default')
+                
             # Define the loss
             loss = layers['total_loss']
             # Set learning rate and momentum
@@ -316,15 +366,7 @@ class SolverWrapper(object):
                         final_gvs.append((grad, var))
                 train_op = self.optimizer.apply_gradients(final_gvs)
             else:
-                if self.techno in ["SSDH"]:
-                    with tf.variable_scope('Gradient_Mult') as scope:
-                        for grad, var in gvs:
-                            #print("grad_var: ", var)
-                            pass
-                            
-                    train_op = self.optimizer.apply_gradients(gvs)
-                else:
-                    train_op = self.optimizer.apply_gradients(gvs)
+                train_op = self.optimizer.apply_gradients(gvs)
             
             # We will handle the snapshots ourselves
             self.saver = tf.train.Saver(max_to_keep=100000)

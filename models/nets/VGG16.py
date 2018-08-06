@@ -19,20 +19,29 @@ class VGG16(object):
         self._scope = 'vgg_16'
         
     """ input => conv5 """
-    def _image_to_head(self, is_training, reuse=None):
+    def _image_to_head(self, is_training, 
+                       trainables=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5'], 
+                       last_pool=True, reuse=None):
         # net.layers[-1]: input layer
         
         with tf.variable_scope(self._scope, self._scope, reuse=reuse):
-            net = slim.repeat(self._images, 2, slim.conv2d, 64, [3, 3], scope='conv1')
-            net = slim.max_pool2d(net, [2, 2], scope='pool1')
-            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
-            net = slim.max_pool2d(net, [2, 2], scope='pool2')
-            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
-            net = slim.max_pool2d(net, [2, 2], scope='pool3')
-            net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
-            net = slim.max_pool2d(net, [2, 2], scope='pool4')
-            net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
-            net = slim.max_pool2d(net, [2, 2], scope='pool5')
+            net = slim.repeat(self._images, 2, slim.conv2d, 64, [3, 3], 
+                              trainable=('conv1' in trainables), scope='conv1')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool1')
+            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], 
+                              trainable=('conv2' in trainables), scope='conv2')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool2')
+            net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], 
+                              trainable=('conv3' in trainables), scope='conv3')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool3')
+            net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], 
+                              trainable=('conv4' in trainables), scope='conv4')
+            net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool4')
+            net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], 
+                              trainable=('conv5' in trainables), scope='conv5')            
+            if last_pool:
+                net = slim.max_pool2d(net, [2, 2], padding='SAME', scope='pool5')
+                #net = tf.reduce_max(net, [1, 2], keep_dims=True, name='pool5')
         
         self._act_summaries.append(net)
         self._layers['head'] = net
@@ -40,21 +49,28 @@ class VGG16(object):
         return net
     
     """ conv5 => fc7 """
-    def _head_to_tail(self, net, is_training, reuse=None):
+    def _head_to_tail(self, net, is_training, reuse=None, global_pool=None):
         # net.layers[-1]: last conv layer
         
-        with tf.variable_scope(self._scope, self._scope, reuse=reuse):
-            
+        with tf.variable_scope(self._scope, self._scope, reuse=reuse):            
             net = slim.conv2d(net, 4096, [7, 7], padding='VALID', scope='fc6')
+            #print("fc6.shape: ", net.shape)
             if is_training:
                 net = slim.dropout(net, keep_prob=0.5, is_training=is_training, scope='dropout6')
             
             net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
+            #print("fc7.shape: ", net.shape)
             if is_training:
                 net = slim.dropout(net, keep_prob=0.5, is_training=is_training, scope='dropout7')
-    
+                
+            if global_pool != None:
+                if global_pool == "MEAN":
+                    net = tf.reduce_mean(net, [1, 2], keepdims=True, name='global_pool')
+                elif global_pool == "MAX":
+                    net = tf.reduce_max(net, [1, 2], keepdims=True, name='global_pool')
+                else:
+                    raise NotImplementedError    
         return net
-    
     
     def get_variables_to_restore(self, variables, var_keep_dic):
         variables_to_restore = []

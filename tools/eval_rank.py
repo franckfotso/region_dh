@@ -18,6 +18,7 @@ from multiprocessing import Process, Queue
 
 from Config import Config
 from datasets.CIFAR10 import CIFAR10
+from datasets.Pascal import Pascal
 from retriever.dist_tools import *
 from utils.timer import Timer
 
@@ -42,7 +43,8 @@ def parse_args():
     return args
 
 
-def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg, encoding="bin_code"):
+def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg, 
+                   encoding="bin_code", dataset=None, multilabel=False):
     """ compute the Mean Average Precision (MAP) for the top-k retrieval """    
     num_qrys = len(val_codes)
     
@@ -67,7 +69,8 @@ def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg,
         q = Queue()
         p = Process(target=_comp_precision, 
                     args=(l_start, l_end, val_labels, val_codes, 
-                          train_labels, train_codes, top_k, encoding, q))
+                          train_labels, train_codes, top_k, encoding, q,
+                          dataset, multilabel))
         p.start()
         processes.append(p)
         queues.append(q)
@@ -93,7 +96,7 @@ def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg,
 
 def _comp_precision(l_start, l_end, val_labels, val_codes, 
                     train_labels, train_codes, 
-                    top_k, encoding, queue):
+                    top_k, encoding, queue, dataset=None, multilabel=False):
     
     # index of the k positions
     m = np.array([ x+1 for x in range(top_k)])
@@ -117,21 +120,26 @@ def _comp_precision(l_start, l_end, val_labels, val_codes,
             # get indexes sorted in min order
             s_indexes = rlt_dists.argsort()
             
-            # sort HAMMING distance in ascending order            
-            qry_rlts = sorted([(rlt_dists[k], train_labels[k], k) for k in s_indexes]) # => (dist, label, idx)
+            # sort HAMMING distance in ascending order
+            _qry_rlts = [(rlt_dists[k], k) for k in s_indexes] # => (dist, idx)
+            _qry_rlts = sorted(_qry_rlts) 
+            qry_rlts = [(dist, train_labels[k], k) for dist, k in _qry_rlts]
             qry_rlts = qry_rlts[:top_k]
+            #raise NotImplementedError
 
         else:
             #print ("[INFO] == using euclidean")
-            qry_rlts = {}
+            rlt_dists = {}
             for id_code, train_code in enumerate(train_codes):
                 # compute distance between the two feature vector
                 d = euclidean_dist(qry_code, train_code) # euclidean   
-                qry_rlts[id_code] = d
+                rlt_dists[id_code] = d
                 #print("d: ", d)
                     
             # sort all results such that small distance values are in the top
-            qry_rlts = sorted([(v, train_labels[k], k) for (k, v) in qry_rlts.items()])
+            _qry_rlts = [(v, k) for (k, v) in rlt_dists.items()]
+            _qry_rlts = sorted(_qry_rlts)
+            qry_rlts = [(dist, train_labels[k], k) for dist, k in _qry_rlts]
             qry_rlts = qry_rlts[:top_k]
 
         # similarity (0, 1) observed for each j-th position
@@ -139,9 +147,18 @@ def _comp_precision(l_start, l_end, val_labels, val_codes,
         N_pos = 0 # number of relevants images within the k results
 
         for j, (dist, label, idx) in enumerate(qry_rlts):
-            if qry_label == label:
-                r[j] = 1 # number of shared label. 1 for single-label   
-                N_pos += 1
+            if multilabel:
+                _N_pos = 0
+                for id_cls in range(len(label)):
+                    if qry_label[id_cls] == 1 and label[id_cls] == qry_label[id_cls]:
+                        #r[j] += 1 # number of shared label. multi-label
+                        r[j] = 1
+                        _N_pos = 1
+                N_pos += _N_pos
+            else:
+                if qry_label == label:
+                    r[j] = 1 # number of shared label. 1 for single-label   
+                    N_pos += 1
 
         # average cummulative gains over the k postions
         ACG = np.cumsum(r)/m
@@ -197,11 +214,16 @@ if __name__ == '__main__':
     assert args["gt_set"] == "train_val", \
     "[ERROR] wrong gt_set provided, found: {}".format(args["gt_set"])
     
+    multilabel = False
     if dataset.name in ds_pascal:
         # TODO: get also labels
-        train_images = dataset.load_gt_rois(gt_set="train")
-        val_images = dataset.load_gt_rois(gt_set="val")
-
+        train_images, _ = dataset.load_gt_rois(gt_set="trainval")
+        train_labels = [image.rois["gt"]["labels"] for image in train_images]
+        
+        val_images, _ = dataset.load_gt_rois(gt_set="test")
+        val_labels = [image.rois["gt"]["labels"] for image in val_images]
+        multilabel = True
+        
     elif dataset.name == "cifar10":
         (train_images, val_images), (train_labels, val_labels) = dataset.load_images()
 
@@ -257,11 +279,12 @@ if __name__ == '__main__':
     val_labels = s_val_labels
     """
     
-    now = time.time()  
+    now = time.time()
     #prec_k, MAP  = comp_precision(val_labels[:100], val_codes[:100], 
     prec_k, MAP  = comp_precision(val_labels, val_codes, 
                                   train_labels, train_codes, 
-                                  args["num_rlts"], cfg, args["encoding"])
+                                  args["num_rlts"], cfg, args["encoding"],
+                                  dataset=dataset, multilabel=multilabel)
     print("comp_precision, speed: {:.3f}s".format(time.time() - now))
     
     # save results

@@ -9,9 +9,10 @@ def add_path(path):
 this_dir = osp.dirname(__file__)
 
 # Add models to PYTHONPATH
-model_path = osp.join(this_dir, '..', 'models')
-add_path(model_path)
+add_path(osp.join(this_dir, '..', 'models'))
 
 # Add libs to PYTHONPATH
-lib_path = osp.join(this_dir, '..', 'libs')
-add_path(lib_path)
+add_path(osp.join(this_dir, '..', 'libs'))
+
+# Add faster_rcnn to PYTHONPATH
+add_path(osp.join(this_dir, '..', 'libs', "faster_rcnn"))

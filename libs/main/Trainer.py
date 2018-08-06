@@ -9,6 +9,7 @@
 from main.BasicWorker import BasicWorker
 from main.SolverWrapper import SolverWrapper
 from datasets.IMGenerator import IMGenerator
+from datasets.ROIGenerator import ROIGenerator
 
 import tensorflow as tf
 
@@ -24,24 +25,34 @@ class Trainer(BasicWorker):
                  cfg)
            
     def run(self, train_images, val_images, tb_dir,
-            output_dir, techno, max_epochs=20):
-        """ Train a CFM network """
+            output_dir, techno, max_epochs=20, pos_weights=None):
+        """ Train the network """
             
         if self.dataset.name in ["cifar10", "cifar10_m"]:            
             train_gen = IMGenerator(train_images, self.dataset, self.cfg)
             val_gen = IMGenerator(val_images, self.dataset, self.cfg)
                                     
         elif self.dataset.name in ["voc_2007", "voc_2012"]:
-            raise NotImplemented
+            self.model['net'].multilabel = True
+            train_gen = ROIGenerator(train_images, self.dataset, pos_weights, self.cfg)
+            val_gen = ROIGenerator(val_images, self.dataset, None, self.cfg)
             
         else:
             print("[ERROR] wrong dataset name, found: ", self.dataset.name)
-            raise NotImplemented
+            raise NotImplementedError
         
         tfconfig = tf.ConfigProto(allow_soft_placement=True)
         tfconfig.gpu_options.allow_growth = True
         
-        max_iters = int((max_epochs*len(train_images))/self.cfg.TRAIN_BATCH_CFC_NUM_IMG)+1
+        _batch_size = 1
+        if self.cfg.MAIN_DEFAULT_TASK == "CFC":
+            _batch_size = self.cfg.TRAIN_BATCH_CFC_NUM_IMG
+        elif self.cfg.MAIN_DEFAULT_TASK == "DET":
+            _batch_size = self.cfg.TRAIN_BATCH_DET_IMS_PER_BATCH
+        else:
+            raise NotImplementedError
+        
+        max_iters = int((max_epochs*len(train_images))/_batch_size)+1
         
         with tf.Session(config=tfconfig) as sess:
             sw = SolverWrapper(self.model['net'], self.model['weights'],techno, self.dataset, 
@@ -49,4 +60,3 @@ class Trainer(BasicWorker):
             print('Solving...')
             sw.train_model(sess, max_iters)
             print('done solving')    
-    

@@ -83,7 +83,7 @@ class Pascal(Dataset):
         im_fn = None
         im_pn = None
         
-        for ext in self.cfg.PASCAL_DATASET_DEFAULT_EXT:
+        for ext in self.cfg.MAIN_DEFAULT_EXT:
             im_pn = osp.join(im_DIR, im_nm+"."+ext)
             if osp.exists(im_pn):
                 im_fn = im_nm+"."+ext
@@ -96,8 +96,9 @@ class Pascal(Dataset):
         
     def load_images(self, im_names):
         images = []
+        pos_weights = np.ones((self.num_cls-1))
         
-        cache_images_file = osp.join(self.cfg.MAIN_DIR_ROOT, "cache","pascal_images.pkl")
+        cache_images_file = osp.join(self.cfg.MAIN_DIR_ROOT, "cache",self.name+"_images.pkl")
         if osp.exists(cache_images_file):
             with open(cache_images_file,'rb') as fp:
                 images = pickle.load(fp)
@@ -118,11 +119,16 @@ class Pascal(Dataset):
                    "[ERROR] unable to load annotation {}".format(im_nm+".xml")
             
             rois = self.readXmlAnno(anno_pn)            
-            img = Image(im_fn, im_pn, gt_rois=rois)           
+            img = Image(im_fn, im_pn)
+            img.rois["gt"] = rois
             images.append(img)
             
+            pos_weights += rois["labels"]
+        
+        pos_weights = pos_weights/len(im_names)
+        
         # prepare images for training
-        images = self.prepare_images(images)
+        #images = self.prepare_images(images)
             
         if not osp.exists(cache_images_file):
             with open(cache_images_file,'wb') as fp:
@@ -130,12 +136,13 @@ class Pascal(Dataset):
                 print ('[INFO] images_obj saved to {}'.format(cache_images_file))
                 fp.close()
             
-        return images
+        return images, pos_weights
     
         
     def load_gt_rois(self, gt_set, num_proc=1):
         images = []        
         im_names = self.sets[gt_set]['im_names']
+        pos_weights = np.zeros((self.num_cls-1))
         
         imgs_DIR = osp.join(self.cfg.MAIN_DIR_ROOT, "data", self.name, 
                                   self.cfg.PASCAL_DATASET_DIR_IMAGE)
@@ -150,15 +157,16 @@ class Pascal(Dataset):
         print ('[INFO] loading gt rois for {}...'.format(self.name))        
         if osp.exists(cache_images_pn):                
             with open(cache_images_pn,'rb') as fp:
-                images = pickle.load(fp)
+                images, pos_weights = pickle.load(fp)
                 print ('[INFO] images with gt loaded from {}'.format(cache_images_pn))
                 fp.close()
                 
-            return images
+            return images, pos_weights
         
         # sub-method for a multiprocessing
         def _load_gt_rois(proc_id, l_start, l_end, im_names, queue, cfg):
             _images = []
+            _pos_weights = np.zeros((self.num_cls-1))
             timer = Timer()
             
             timer.tic()            
@@ -168,12 +176,12 @@ class Pascal(Dataset):
                 """ load rois data """
                 img_fn, img_pn = self.built_im_path(im_nm, imgs_DIR)
                 anno_pn = osp.join(anno_DIR, im_nm+".xml")
-                
-                image = Image(filename=img_fn,pathname=img_pn)                
+                                              
                 rois = self.readXmlAnno(anno_pn)
+                image = Image(filename=img_fn,pathname=img_pn, rois={"gt": rois})                
                 
-                image.gt_rois = rois
                 _images.append(image)
+                _pos_weights += rois["labels"]
             
             timer.toc()    
             #n_imgs = len(xrange(l_start, l_end))
@@ -181,7 +189,7 @@ class Pascal(Dataset):
             format(proc_id, l_start, l_end, len(im_names), timer.average_time))
                 
             #return on queue
-            queue.put(_images)           
+            queue.put([_images, _pos_weights])           
         
         processes = []
         queues  = []
@@ -203,27 +211,31 @@ class Pascal(Dataset):
             l_start += l_offset
             
         for proc_id in range(num_proc):            
-            _images = queues[proc_id].get()
+            _images, _pos_weights = queues[proc_id].get()
             images.extend(_images)
+            pos_weights += _pos_weights
             processes[proc_id].join()
             
-        print ('gt > bef. flipped, len(images): {}'.format(len(images)))
-        
-        """ append horizontal flipped  images """
-        print ('[INFO] append horizontal flipped  gt images: {}'.format(self.name))
-        
-        if self.cfg.TRAIN_DEFAULT_USE_FLIPPED and gt_set != 'test':
-            images = self.append_flipped_images(images=images, src='gt', num_proc=num_proc)
+        pos_weights = pos_weights/num_imgs
             
-        print ('gt > aft. flipped, len(images): {}'.format(len(images)))
-                
+        # filter images and remove images with neither fg nor bg
+        images = self.filter_images(images)       
+        
+        """ append horizontal flipped  images """        
+        if self.cfg.TRAIN_DEFAULT_USE_FLIPPED and gt_set != 'test':
+            print ('[INFO] append horizontal flipped  gt images: {}'.format(self.name))
+            print ('gt > bef. flipped, len(images): {}'.format(len(images)))
+            images = self.append_flipped_images(images=images, src='gt', num_proc=num_proc)            
+            print ('gt > aft. flipped, len(images): {}'.format(len(images)))
+
         if not osp.exists(cache_images_pn):
             with open(cache_images_pn,'wb') as fp:
-                pickle.dump(images, fp)
+                to_dump = [images, pos_weights]
+                pickle.dump(to_dump, fp)
                 print ('[INFO] images with gt saved to {}'.format(cache_images_pn))
                 fp.close()
         
-        return images
+        return images, pos_weights
    
     def load_sets(self):
         sets = {
@@ -236,10 +248,8 @@ class Pascal(Dataset):
                 
         if task == 'CFC' or task == 'DET':
             DATASET_DIR = self.cfg.PASCAL_DATASET_DIR_MAIN_SET
-        elif task == 'SEGM':
-            DATASET_DIR = self.cfg.PASCAL_DATASET_DIR_SEGM_SET
         else:
-            raise('[ERROR] unknown task')
+            raise NotImplemented
         
         if self.name == "bsd_voc2012":
             DATASET_DIR = ''
@@ -254,7 +264,7 @@ class Pascal(Dataset):
                               DATASET_DIR, self.cfg.PASCAL_DATASET_FILE_TEST)
         
         val_file = osp.join(self.cfg.MAIN_DIR_ROOT, "data", self.name, 
-                              DATASET_DIR, self.cfg.PASCAL_DATASET_FILE_VAL)        
+                              DATASET_DIR, self.cfg.PASCAL_DATASET_FILE_VAL)  
         
         im_names = []
         if osp.exists(train_file):
@@ -319,8 +329,8 @@ class Pascal(Dataset):
         boxes = np.zeros((num_objs, 4), dtype=np.uint16)
         gt_classes = np.zeros((num_objs), dtype=np.int32)
         overlaps = np.zeros((num_objs, len(self.cls_to_id)), dtype=np.float32)
-        seg_areas = np.zeros((num_objs), dtype=np.float32)
-        is_segm = int(root.find('segmented').text)
+        labels = np.zeros((len(self.cls_to_id)), dtype=np.int32)       
+        
         size = root.find('size')
         im_info = {"width": int(size.find('width').text),
                    "height": int(size.find('height').text),
@@ -336,15 +346,14 @@ class Pascal(Dataset):
             boxes[id_obj,:] = [xmin, ymin, xmax, ymax]
             gt_classes[id_obj] = id_cls
             overlaps[id_obj, id_cls] = 1.0
-            seg_areas[id_obj] = (xmax - xmin + 1) * (ymax - ymin + 1)
+            labels[id_cls] = 1
         
-        #overlaps = csr_matrix(overlaps)
+        labels = labels[1:]
         
         return {"boxes": boxes,
+                "labels": labels,
                 "gt_classes": gt_classes,
-                "gt_overlaps": overlaps,
-                "seg_areas": seg_areas,
-                "is_segm": is_segm,
+                "max_overlaps": overlaps,
                 "im_info": im_info,
                 "flipped": False}
         
@@ -354,15 +363,21 @@ class Pascal(Dataset):
         images_OK = []
         
         for im_i in range(num_imgs):
-            gt_overlaps = images[im_i].gt_rois['max_overlaps']
-            pr_overlaps = images[im_i].pr_rois['max_overlaps']            
+            """
+            gt_overlaps, pr_overlaps = ([], [])            
+            if "gt" in images[im_i].rois.keys():
+                gt_overlaps = images[im_i].rois["gt"]['max_overlaps']
+            if "pr" in images[im_i].rois.keys():                
+                pr_overlaps = images[im_i].rois["pr"]['max_overlaps']                
             all_overlaps = gt_overlaps.extend(pr_overlaps)
+            """
+            all_overlaps = images[im_i].rois["gt"]['max_overlaps']
             
             # find boxes with sufficient overlap
-            fg_inds = np.where(all_overlaps >= self.cfg.TRAIN_DEFAULT_FG_THRESH)[0]
+            fg_inds = np.where(all_overlaps >= self.cfg.TRAIN_BATCH_DET_FG_THRESH)[0]
             # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
-            bg_inds = np.where((all_overlaps < self.cfg.TRAIN_DEFAULT_BG_THRESH_HI) &
-                               (all_overlaps >= self.cfg.TRAIN_DEFAULT_BG_THRESH_LO))[0]
+            bg_inds = np.where((all_overlaps < self.cfg.TRAIN_BATCH_DET_BG_THRESH_HI) &
+                               (all_overlaps >= self.cfg.TRAIN_BATCH_DET_BG_THRESH_LO))[0]
             # image is only valid if such boxes exist
             valid = len(fg_inds) > 0 or len(bg_inds) > 0
             
@@ -383,9 +398,9 @@ class Pascal(Dataset):
         '[ERROR] unknown rois src provided'
         
         if src == 'gt':
-            widths = [image.gt_rois['im_info']['width'] for image in images]
+            widths = [image.rois["gt"]['im_info']['width'] for image in images]
         elif src == 'pr':
-            widths = [image.pr_rois['im_info']['width'] for image in images]
+            widths = [image.rois["pr"]['im_info']['width'] for image in images]
         
         # sub-method for multiprocessing
         def _append_flipped_images(proc_id, l_start, l_end, queue, cfg):
@@ -395,9 +410,9 @@ class Pascal(Dataset):
             timer.tic() 
             for im_i in range(l_start, l_end):
                 if src == 'gt':
-                    boxes = images[im_i].gt_rois['boxes'].copy()
+                    boxes = images[im_i].rois["gt"]['boxes'].copy()
                 elif src == 'pr':
-                    boxes = images[im_i].pr_rois['boxes'].copy()
+                    boxes = images[im_i].rois["pr"]['boxes'].copy()
                     
                 oldx1 = boxes[:, 0].copy()
                 oldx2 = boxes[:, 2].copy()
@@ -409,11 +424,11 @@ class Pascal(Dataset):
                             
                 image = copy.deepcopy(images[im_i])
                 if src == 'gt':
-                    image.gt_rois['boxes'] = boxes
-                    image.gt_rois['flipped'] = True
+                    image.rois["gt"]['boxes'] = boxes
+                    image.rois["gt"]['flipped'] = True
                 elif src == 'pr':
-                    image.pr_rois['boxes'] = boxes
-                    image.pr_rois['flipped'] = True
+                    image.rois["pr"]['boxes'] = boxes
+                    image.rois["pr"]['flipped'] = True
                     
                 _images_flip.append(image)
                 

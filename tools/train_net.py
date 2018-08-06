@@ -28,6 +28,7 @@ from main.Trainer import Trainer
 from nets.VGG16_FT import VGG16_FT
 from nets.VGG16_DLBHC import VGG16_DLBHC
 from nets.VGG16_SSDH import VGG16_SSDH
+from nets.VGG16_RegionDH import VGG16_RegionDH
 
 def parse_args():
     # construct the argument parse and parse the arguments
@@ -106,8 +107,8 @@ if __name__ == '__main__':
     
     if gt_set == "train_val":
         if dataset.name in ds_pascal:
-            train_images = dataset.load_gt_rois(gt_set="train")
-            val_images = dataset.load_gt_rois(gt_set="val")
+            train_images, pos_weights = dataset.load_gt_rois(gt_set="trainval")
+            val_images, _ = dataset.load_gt_rois(gt_set="test")
             
         elif dataset.name in ["cifar10", "cifar10_m"]:
             (train_images, val_images), _ = dataset.load_images()
@@ -125,6 +126,7 @@ if __name__ == '__main__':
     
     net = None
     weights = None # pretrained weights
+    
     if args['net'] == "VGG16":
         if techno == "FT":
             net = VGG16_FT(cfg)
@@ -134,6 +136,9 @@ if __name__ == '__main__':
             
         elif techno == "SSDH":
             net = VGG16_SSDH(cfg, args["num_bits"])
+            
+        elif techno == "Region-DH":
+            net = VGG16_RegionDH(cfg, args["num_bits"])
             
         weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"
         
@@ -149,6 +154,7 @@ if __name__ == '__main__':
     
     print ('[INFO] Start the training process on {}'.format(args["dataset"]))
     max_epochs = args['epochs']    
-    trainer.run(train_images, val_images, tb_dir, output_dir, techno, max_epochs=max_epochs)    
+    trainer.run(train_images, val_images, tb_dir, output_dir, 
+                techno, max_epochs=max_epochs, pos_weights=pos_weights)    
     
     
