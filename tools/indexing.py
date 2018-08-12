@@ -83,9 +83,13 @@ if __name__ == '__main__':
     print ('[INFO] dataset.test: {}'.format(dataset.sets["test"]["num_items"]))
     print ('[INFO] dataset.val: {}'.format(dataset.sets["val"]["num_items"]))
     
+    multilabel = False
     if gt_set == "train_val":
         if dataset.name in ds_pascal:
             images, _ = dataset.load_gt_rois(gt_set="trainval")
+            # remove flipped images
+            images = [image for image in images if not image.rois["gt"]['flipped']]
+            multilabel  = True
             
         elif dataset.name in ["cifar10"]:
             (images, _), _ = dataset.load_images()           
@@ -93,6 +97,7 @@ if __name__ == '__main__':
     elif gt_set == "test":
         if dataset.name in ds_pascal:
             images, _ = dataset.load_gt_rois(gt_set="test")
+            multilabel  = True
             
         elif dataset.name in ["cifar10"]:
             (_, images), _ = dataset.load_images() 
@@ -105,13 +110,15 @@ if __name__ == '__main__':
 
     # hash codes & deep features extractor
     deep_extr = DeepExtractor(args["techno"], args["net"], dataset.num_cls, 
-                              args["num_bits"], args["weights"], cfg)
+                              args["num_bits"], args["weights"], multilabel, cfg)
 
     im_pns = [image.pathname for image in images]
     im_pns = np.array(im_pns)
     
+    """
     assert len(im_pns) % bacth_size == 0, \
      "[ERROR] BATCH_SIZE must be divible with total images. Set INDEXING_BATCH_SIZE = 1 to continue"
+    """
     
     # initialize the deep feature indexer
     di = DeepIndexer(args["deep_db"], 
@@ -124,9 +131,15 @@ if __name__ == '__main__':
     
     for i in range(0,len(im_pns), bacth_size):
         _im_pns = im_pns[i:i+bacth_size]
+        _images = images[i:i+bacth_size]
         
         # extract binary codes & deep features
-        binary_codes, deep_features = deep_extr.extract(_im_pns)        
+        
+        try:
+            binary_codes, deep_features = deep_extr.extract(_images)
+        except:
+            print("[ALERT] exception found, images skipped !")
+            continue
         
         """
             indexing data extracted in hdfs file
@@ -140,9 +153,9 @@ if __name__ == '__main__':
         
         # check to see if progress should be displayed
         if i > 0 and bacth_size > 1 and i % bacth_size == 0:
-            di._debug("saved {} images".format(i), msgType="[PROGRESS]")
+            di._debug("saved {}/{} images".format(i, len(im_pns)), msgType="[PROGRESS]")
         elif i > 0 and bacth_size == 1 and i % 10 == 0:
-            di._debug("saved {} images".format(i), msgType="[PROGRESS]")
+            di._debug("saved {}/{} images".format(i, len(im_pns)), msgType="[PROGRESS]")
 
     # finish the indexing process
     di._debug("{} images sucessfully indexed".format(len(im_pns)), msgType="[INFO]")

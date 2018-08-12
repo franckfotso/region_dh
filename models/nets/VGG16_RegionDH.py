@@ -21,7 +21,7 @@ from faster_rcnn import layers
 
 class VGG16_RegionDH(VGG16):
     
-    def __init__(self, cfg, num_bits):
+    def __init__(self, cfg, num_bits, multilabel=True):
         VGG16.__init__(self)        
         self._predictions = {}
         self._anchor_targets = {}
@@ -34,7 +34,10 @@ class VGG16_RegionDH(VGG16):
         self._score_summaries = {}
         self._train_summaries = []
         self._event_summaries = {}
+        self._loss_summaries = {}
+        self._acc_summaries = {}
         self._variables_to_fix = {}
+        self.multilabel = multilabel
         
         self._feat_stride = [16, ]
         self._num_bits = num_bits
@@ -54,8 +57,8 @@ class VGG16_RegionDH(VGG16):
             self._images = tf.placeholder(tf.float32, shape=[1, None, None, 3])
             self._im_info = tf.placeholder(tf.float32, shape=[3])
             self._gt_boxes = tf.placeholder(tf.float32, shape=[None, 5])
-            self._labels = tf.placeholder(tf.int32, shape=[1, num_classes-1])       
-            self._pos_weight = tf.placeholder(tf.float32, shape=[1])
+            self._labels = tf.placeholder(tf.int32, shape=[1, num_classes-1])
+            self._pos_weights = tf.placeholder(tf.float32, shape=[1, num_classes-1])
             
         else:
             # mode: TEST
@@ -93,19 +96,22 @@ class VGG16_RegionDH(VGG16):
             self._train_summaries.append(var)
     
         if testing:
-            stds = np.tile(np.array(cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_STDS), (self._num_classes))
-            means = np.tile(np.array(cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_MEANS), (self._num_classes))
-            self._predictions["bbox_pred"] *= stds
-            self._predictions["bbox_pred"] += means
+            stds = np.tile(np.array(self.cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_STDS), (self._num_classes))
+            means = np.tile(np.array(self.cfg.TRAIN_BATCH_DET_BBOX_NORMALIZE_MEANS), (self._num_classes))
+            self._predictions["bbox_xy_pred"] *= stds
+            self._predictions["bbox_xy_pred"] += means
         else:
             self._add_losses()
             layers_to_output.update(self._losses)
             
             val_summaries = []
             with tf.device("/cpu:0"):                
-                for key, var in self._event_summaries.items():
-                    #print("key: {}, var: {}".format(key, var))
-                    val_summaries.append(tf.summary.scalar(key, var))
+                for key, var in self._loss_summaries.items():
+                    # add loss to summary
+                    val_summaries.append(self._add_loss_summary(key, var))
+                for key, var in self._acc_summaries.items():
+                    # add acc to summary
+                    val_summaries.append(self._add_acc_summary(key, var))
                 for key, var in self._score_summaries.items():
                     self._add_score_summary(key, var)
                 for var in self._act_summaries:
@@ -131,6 +137,7 @@ class VGG16_RegionDH(VGG16):
         with tf.variable_scope(self._scope, self._scope):
             # build the anchors for the image
             layers._anchor_component(self)
+            
             # region proposal network: RPN
             rois = layers._region_proposal(self, net_conv, is_training, initializer)
             num_rois = rois.shape[0]
@@ -140,11 +147,12 @@ class VGG16_RegionDH(VGG16):
             
         # bbox_feat: N x b
         bbox_feat = self._head_to_tail(pool5, is_training) # fc7
+        print("bbox_feat.shape: ", bbox_feat.shape)
         
         with tf.variable_scope(self._scope, self._scope):
             # rois encoding
             embs_H1 = self._image_encoding(bbox_feat, is_training, scope="embs_H1")
-            #print("embs_H1.shape: ", embs_H1.shape)
+            print("embs_H1.shape: ", embs_H1.shape)
             
             # bbox_xy_pred: N x 4c
             bbox_xy_pred = self._region_regression(bbox_feat, is_training)
@@ -152,25 +160,20 @@ class VGG16_RegionDH(VGG16):
             # bbox_score: N x c, bbox_prob: N x c, bbox_cls_pred: N x 1
             bbox_score, bbox_prob, bbox_cls_pred = self._region_classification(embs_H1, is_training)
                         
-            # cross-proposal fusion => instance-aware feature (iaf): c x b
-            #print("bbox_feat.shape: ", bbox_feat.shape)
-            bbox_feat = tf.reshape(bbox_feat, [num_rois,-1])
-            bbox_prob = tf.reshape(bbox_prob, [num_rois,-1])
-            #print("bbox_feat.shape: ", bbox_feat.shape)
-            #print("bbox_prob.shape: ", bbox_prob.shape)     
-            # we exclude the background class [1:] and emphasize foreground interest
+            # cross-proposal fusion => instance-aware feature (iaf): c x b    
+            # we exclude the bg class [1:] to emphasize the fg interest
             ia_feat = tf.tensordot(tf.transpose(bbox_prob)[1:], bbox_feat, axes=1, name="ia_feat")
-            #print("ia_feat.shape: ", ia_feat.shape)
+            print("ia_feat.shape: ", ia_feat.shape)
             ia_feat = tf.reshape(ia_feat, [1, -1])
-            #print("ia_feat.shape: ", ia_feat.shape)
+            print("ia_feat.shape: ", ia_feat.shape)
             
             # image encoding
             embs_H2 = self._image_encoding(ia_feat, is_training, scope="embs_H2")
             ia_feat = tf.reshape(ia_feat, [ia_feat.shape[0], -1])
-            #print("embs_H2.shape: ", embs_H2.shape)
+            print("embs_H2.shape: ", embs_H2.shape)
             
             # im_score: 1 x c, im_prob: 1 x c, im_pred: 1 x 1
-            im_score, im_prob, im_pred = self._image_classification(embs_H2, is_training)    
+            im_score, im_prob, im_pred = self._image_classification(embs_H2, is_training) 
             
             self._predictions["bbox_xy_pred"] = bbox_xy_pred
             self._predictions["bbox_score"] = bbox_score
@@ -183,16 +186,14 @@ class VGG16_RegionDH(VGG16):
             self._predictions["im_pred"] = im_pred
             
             if not is_training:
-                self._predictions["embs_H1"] = tf.reshape(embs_H1, [embs_H1.shape[0],-1])
-                self._predictions["embs_H2"] = tf.reshape(embs_H2, [embs_H2.shape[0],-1])
-                self._predictions["bbox_feat"] = tf.reshape(bbox_feat, [bbox_feat.shape[0],-1])
-                self._predictions["ia_feat"] = tf.reshape(ia_feat, [ia_feat.shape[0],-1])
+                self._predictions["bbox_feat"] = bbox_feat
+                self._predictions["ia_feat"] = ia_feat
         
         self._score_summaries.update(self._predictions)
     
         return rois
     
-    #"""
+    
     def _head_to_tail(self, net, is_training, reuse=None):
         # net.layers[-1]: last conv layer
         
@@ -208,19 +209,39 @@ class VGG16_RegionDH(VGG16):
                 net = slim.dropout(net, keep_prob=0.5, is_training=True, 
                                     scope='dropout7')    
         return net
-    #"""
+    
+    
+    def get_variables_to_restore(self, variables, var_keep_dic):
+        variables_to_restore = []
+    
+        for v in variables:
+            """
+            # exclude the conv weights that are fc weights in vgg16
+            if v.name == (self._scope + '/fc6/weights:0') or \
+                v.name == (self._scope + '/fc7/weights:0'):
+                self._variables_to_fix[v.name] = v
+                continue
+            # exclude the first conv layer to swap RGB to BGR
+            if v.name == (self._scope + '/conv1/conv1_1/weights:0'):
+                self._variables_to_fix[v.name] = v
+                continue
+            """
+            if v.name.split(':')[0] in var_keep_dic:
+                print('Variables restored: %s' % v.name)
+                variables_to_restore.append(v)
+    
+        return variables_to_restore 
+    
+    
+    def fix_variables(self, sess, pretrained_model):
+        print('Fix VGG16 layers...') # skip if pretrained is ckpt        
+    
     
     def _image_encoding(self, net, is_training, scope="fc_emb"):
         # net.layers[-1]: last fc layer (fc7)
         initializer = tf.random_normal_initializer(mean=0.0, stddev=0.005)
         
-        # fc layer: random initializer & sigmoid activation
-        """
-        fc_emb = slim.conv2d(net, self._num_bits, [1, 1],
-                          weights_initializer=initializer,
-                          trainable=is_training,
-                          activation_fn=tf.nn.sigmoid, scope=scope)
-        """
+        # fc layer: random initializer & sigmoid activation        
         fc_emb = slim.fully_connected(net, self._num_bits, 
                                       weights_initializer=initializer,
                                       trainable=is_training,
@@ -243,19 +264,12 @@ class VGG16_RegionDH(VGG16):
     def _region_classification(self, net, is_training):
         # net.layers[-1]: fc_emb
         initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
-        """
-        bbox_score = slim.conv2d(net, self._num_classes, [1, 1],
-                          weights_initializer=initializer,
-                          trainable=is_training,
-                          activation_fn=None, scope='bbox_score')
-        bbox_score = tf.reshape(bbox_score, [bbox_score.shape[0],-1])
-        """
         
         bbox_score = slim.fully_connected(net, self._num_classes, 
                               weights_initializer=initializer,
                               trainable=is_training,
                               activation_fn=None,
-                              scope='bbox_score')    
+                              scope='bbox_score')
                 
         bbox_prob = tf.nn.softmax(bbox_score, name="bbox_prob")
         bbox_cls_pred = tf.argmax(bbox_score, axis=1, name="bbox_cls_pred")
@@ -265,29 +279,37 @@ class VGG16_RegionDH(VGG16):
     
     
     def _image_classification(self, net, is_training):
-        # net.layers[-1]: fc_emb
-        initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
+        # using binary softmax classifiers        
+        cls_score, cls_prob, cls_pred = ([], [], [])
         
-        """
-        im_score = slim.conv2d(net, self._num_classes-1, [1, 1],
+        for i in range(self._num_classes-1):
+            initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
+
+            _cls_score = slim.fully_connected(net, 2, 
                           weights_initializer=initializer,
                           trainable=is_training,
-                          activation_fn=None, scope='im_score')
-        im_score = tf.reshape(im_score, [im_score.shape[0],-1])
-        """        
-        im_score = slim.fully_connected(net, self._num_classes-1, 
-                  weights_initializer=initializer,
-                  trainable=is_training,
-                  activation_fn=None,
-                  scope='im_score')
+                          activation_fn=None,
+                          scope='cls_score'+str(i))
+
+            _cls_prob = tf.nn.softmax(_cls_score, name="cls_prob"+str(i))
+            _cls_prob = tf.reshape(_cls_prob, [_cls_prob.shape[0], -1])
+            _cls_pred = tf.argmax(_cls_prob, axis=1, name="cls_pred"+str(i))
+
+            _cls_score = tf.reshape(_cls_score, [_cls_score.shape[0], 1, -1])
+            _cls_prob = tf.reshape(_cls_prob, [_cls_prob.shape[0], 1, -1])
+            _cls_pred = tf.reshape(_cls_pred, [_cls_pred.shape[0], 1, -1])                             
+            cls_score.append(_cls_score)
+            cls_prob.append(_cls_prob)
+            cls_pred.append(_cls_pred)                                     
+
+        cls_score = tf.concat(cls_score, axis=1, name="cls_score")
+        cls_prob = tf.concat(cls_prob, axis=1, name="cls_prob")
+        cls_pred = tf.concat(cls_pred, axis=1, name="cls_pred")
         
-        im_prob = tf.nn.sigmoid(im_score, "im_prob")
-        im_pred = tf.round(im_prob)
-        im_pred = tf.reshape(im_pred, [-1, self._num_classes-1])                
+        return cls_score, cls_prob, cls_pred
     
-        return im_score, im_prob, im_pred
-    
-    def k1_euclidean_loss(self, scope="fc_emb", norm_order=2, weights=1.0):
+       
+    def k1_euclidean_loss(self, scope="fc_emb",norm_order=2, weights=1.0):
         """ forcing binary: alternative to the quantization loss """
         
         fc_emb = self._predictions[scope]
@@ -296,52 +318,27 @@ class VGG16_RegionDH(VGG16):
         _cal = tf.subtract(fc_emb, 0.5)        
         _cal = tf.multiply(_cal, _cal)
         _cal = tf.reduce_mean(_cal, 1)
-        loss = tf.reduce_mean(_cal, 0)*(-1)
-        
-        return tf.scalar_mul(weights, loss)
-    
-    
-    def k1_euclidean_grad(self, scope="fc_emb", norm_order=2, weights=1.0):
-        """ forcing binary: gradients """
-        
-        fc_emb = self._predictions[scope]
-        fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
-        
-        _cal = tf.subtract(fc_emb, 0.5) 
-        _cal = tf.multiply(tf.sign(_cal), _cal)
-        _cal = tf.reduce_mean(_cal, 1) 
-        _cal = tf.reduce_mean(_cal, 0)
-        grad = (_cal/norm_order)*(-1)
-        
-        return tf.scalar_mul(weights, grad)
+        _cal = tf.reduce_mean(_cal, 0)*(-1)
+        loss = tf.scalar_mul(weights, _cal)
+        tf.losses.add_loss(loss)
+                
+        return loss
         
     
-    def k2_euclidean_loss(self, scope="fc_emb", norm_order=1, weights=1.0):
+    def k2_euclidean_loss(self, scope="fc_emb",norm_order=1, weights=1.0):
         """ 50% fire for each bit: avoid preference for hidden values to be 0 or 1 """
         
         fc_emb = self._predictions[scope]
         fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
        
-        fc_avg = tf.reduce_mean(fc_emb, 1)        
-        _cal = tf.subtract(fc_avg, 0.5)      
+        fc_avg = tf.reduce_mean(fc_emb, 1)  
+        _cal = tf.subtract(fc_avg, 0.5)   
         _cal = tf.multiply(_cal, _cal)
-        loss = tf.reduce_mean(_cal, 0)
-        
-        return tf.scalar_mul(weights, loss)
-    
-    def k2_euclidean_grad(self, scope="fc_emb", norm_order=2, weights=1.0):
-        """ 50% fire for each bit: gradients """
-        
-        fc_emb = self._predictions[scope]
-        fc_emb = tf.reshape(fc_emb, [fc_emb.shape[0],-1])
-        
-        fc_avg = tf.reduce_mean(fc_emb, 1)        
-        _cal = tf.subtract(fc_avg, 0.5) 
-        _cal = tf.multiply(tf.sign(_cal), _cal)
         _cal = tf.reduce_mean(_cal, 0)
-        grad = _cal/norm_order
-        
-        return tf.scalar_mul(weights, grad)
+        loss = tf.scalar_mul(weights, _cal)
+        tf.losses.add_loss(loss)
+                
+        return loss    
     
     
     def _add_losses(self, sigma_rpn=3.0):
@@ -376,8 +373,6 @@ class VGG16_RegionDH(VGG16):
             bbox_inside_weights = self._proposal_targets['bbox_inside_weights']
             bbox_outside_weights = self._proposal_targets['bbox_outside_weights']
             # = loss_box
-            #print("bbox_xy_pred.shape: ", bbox_xy_pred.shape)
-            #print("bbox_targets.shape: ", bbox_targets.shape)
             L_reg2 = self.alphas[1]*layers._smooth_l1_loss(bbox_xy_pred, bbox_targets, 
                                                           bbox_inside_weights, 
                                                           bbox_outside_weights)
@@ -395,75 +390,78 @@ class VGG16_RegionDH(VGG16):
             
             # Hashing, instance-aware loss: L_H1 (E1 & E2)
             # == forcing binary loss: E1
-            L_H1_E1 = self.k1_euclidean_loss(scope="embs_H1", weights=self.gammas_H1[0])
-            self._losses['L_H1_E1'] = L_H1_E1
+            L_H1_E1 = self.k1_euclidean_loss(scope="embs_H1", weights=self.gammas_H1[0])            
             # == 50% fire for each bit loss: E2
-            L_H1_E2 = self.k2_euclidean_loss(scope="embs_H1", weights=self.gammas_H1[1])
-            self._losses['L_H1_E2'] = L_H1_E2
-            L_H1 = L_H1_E1 + L_H1_E2
-            tf.losses.add_loss(L_H1)
-            self._losses['L_H1'] = L_H1
+            L_H1_E2 = self.k2_euclidean_loss(scope="embs_H1", weights=self.gammas_H1[1])            
+            #self._losses['L_H1_E1'] = L_H1_E1
+            #self._losses['L_H1_E2'] = L_H1_E2
+            self._losses['L_H1'] = L_H1_E1 + L_H1_E2
             
             # Hashing, image loss: L_H2 (E1 & E2)
             # == forcing binary loss: E1
-            L_H2_E1 = self.k1_euclidean_loss(scope="embs_H2", weights=self.gammas_H2[0])
-            self._losses['L_H2_E1'] = L_H2_E1
+            L_H2_E1 = self.k1_euclidean_loss(scope="embs_H2", weights=self.gammas_H2[0])            
             # == 50% fire for each bit loss: E2
             L_H2_E2 = self.k2_euclidean_loss(scope="embs_H2", weights=self.gammas_H2[1])
-            self._losses['L_H2_E2'] = L_H2_E2
-            L_H2 = L_H2_E1 + L_H2_E2
-            tf.losses.add_loss(L_H2)
-            self._losses['L_H2'] = L_H2
+            #self._losses['L_H2_E1'] = L_H2_E1
+            #self._losses['L_H2_E2'] = L_H2_E2
+            self._losses['L_H2'] = L_H2_E1 + L_H2_E2
             
             # RCNN, classification loss: L_cls3
             im_score = self._predictions["im_score"]
             im_label = self._labels          
             im_label = tf.reshape(im_label, [-1, self._num_classes-1])
-            # Note: loss will be registred via tf.losses
-            #print("im_score.shape: ", im_score.shape)
-            #print("im_label.shape: ", im_label.shape)
-            L_cls3 = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=im_score, 
-                                                                     multi_class_labels=im_label,
-                                                                     weights=self.betas[2]))
-            """
+            
             # weighting loss
-            pos_weight = self._gt_boxes.shape[0]/self._labels.shape[1]
-            pos_weight = 1 - pos_weight
-            L_cls3 = self.betas[2]*tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(logits=im_score,
-                                                                                           targets=im_label,
-                                                                                           pos_weight=pos_weight))
-            tf.losses.add_loss(L_cls3)
-            """
+            pos_weights = tf.reshape(self._pos_weights, [self._pos_weights.shape[0], -1])                
+            #print("pos_weights.shape: ", pos_weights.shape)
+            
+            L_cls3 = 0
+            for i in range(self._num_classes-1):
+                pos_weight = pos_weights[:, i]
+                pos_weight = tf.reshape(pos_weight, [pos_weight.shape[0], -1])
+
+                _cls_score = im_score[:, i, :]
+                _labels = im_label[:, i]
+
+                _labels = tf.reshape(_labels, [-1])
+                _L_cls3 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=_cls_score, 
+                                                                                        labels=_labels,
+                                                                                        name="L_cls3."+str(i)))
+                #_loss_E1 = _loss_E1*pos_weight[0] # weighting loss
+                tf.losses.add_loss(_L_cls3)
+                L_cls3 += _L_cls3  
+            
             self._losses['L_cls3'] = L_cls3                     
             
             # Overall loss: L_reg(1,2) + L_cls(1,2,3) + L_H(1,2) + regu
             self._losses['total_loss'] = tf.losses.get_total_loss()
                        
             self._event_summaries.update(self._losses)
+            self._loss_summaries.update(self._losses)
+            
+            self._losses['L_H1_E1'] = L_H1_E1
+            self._losses['L_H1_E2'] = L_H1_E2
+            self._losses['L_H2_E1'] = L_H2_E1
+            self._losses['L_H2_E2'] = L_H2_E2
             
             # Evaluation metrics
             im_pred = tf.to_int32(self._predictions["im_pred"])
             bbox_cls_pred = tf.to_int32(self._predictions["bbox_cls_pred"])
             
-            """
-            im_precision = tf.metrics.precision(labels=im_label, 
-                                              predictions=im_pred, name="im_precision") 
-            im_recall = tf.metrics.recall(labels=im_label, 
-                                              predictions=im_pred, name="im_recall")
-            im_acc_cls = 2*im_precision[1]*im_recall[1]/(im_precision[1]+im_recall[1]) # f1-score
-            """
-            
-            #self._pos_weight = 1.0 - self._pos_weight
-            #"""
-            im_acc_cls = tf.contrib.metrics.accuracy(predictions=im_pred, labels=im_label, 
-                                                     weights=1-self._pos_weight[0], name="im_acc_cls")
-            #"""
+            im_acc_cls, _, _ = layers._precision_recall_score(im_label, im_pred, "prec_rec_score")
             bbox_acc_cls = tf.contrib.metrics.accuracy(predictions=bbox_cls_pred, labels=bbox_label, name="bbox_acc_cls")
             
             self._accuracies['im_acc_cls'] = im_acc_cls
             self._accuracies['bbox_acc_cls'] = bbox_acc_cls            
             self._event_summaries.update(self._accuracies)
-            
+            self._acc_summaries.update(self._accuracies)
+    
+    
+    def _add_loss_summary(self, key, var):
+        return tf.summary.scalar('LOSS/' + key, var)   
+        
+    def _add_acc_summary(self, key, var):
+        return tf.summary.scalar('ACC/' + key, var)
     
     def _add_act_summary(self, tensor):
         tf.summary.histogram('ACT/' + tensor.op.name + '/activations', tensor)
@@ -483,7 +481,7 @@ class VGG16_RegionDH(VGG16):
                      self._im_info: blobs['im_info'],
                      self._gt_boxes: blobs['gt_boxes'],
                      self._labels: blobs['labels'],
-                     self._pos_weight: blobs['pos_weight']}
+                     self._pos_weights: blobs['pos_weights']}
         
         summary = sess.run(self._summary_op_val, feed_dict=feed_dict)
     
@@ -491,14 +489,14 @@ class VGG16_RegionDH(VGG16):
     
     
     # only useful during testing mode
-    def test_image(self, sess, im_blob):
-        feed_dict = {self._images: im_blob}
+    def test_image(self, sess, blobs):
+        feed_dict = {self._images: blobs['data'], self._im_info: blobs['im_info']}
         
         bbox_score, bbox_prob, bbox_pred, \
         im_score, im_prob, im_pred, \
         embs_H1, embs_H2, bbox_feat, ia_feat = sess.run([self._predictions["bbox_score"],
                                                          self._predictions['bbox_prob'],
-                                                         self._predictions['bbox_pred'],
+                                                         self._predictions['bbox_xy_pred'],
                                                          self._predictions['im_score'],
                                                          self._predictions['im_prob'],
                                                          self._predictions['im_pred'],
@@ -507,8 +505,10 @@ class VGG16_RegionDH(VGG16):
                                                          self._predictions["bbox_feat"],
                                                          self._predictions["ia_feat"]],
                                                           feed_dict=feed_dict)
-        return bbox_score, bbox_prob, bbox_pred, im_score, im_prob, im_pred, \
-                 embs_H1, embs_H2, bbox_feat, ia_feat
+        
+        #return bbox_score, bbox_prob, bbox_pred, im_score, im_prob, im_pred, embs_H1, embs_H2, bbox_feat, ia_feat
+        
+        return im_score, im_prob, im_pred, embs_H2, ia_feat
     
     
     def train_step(self, sess, blobs, train_op):
@@ -516,7 +516,7 @@ class VGG16_RegionDH(VGG16):
                      self._im_info: blobs['im_info'],
                      self._gt_boxes: blobs['gt_boxes'],
                      self._labels: blobs['labels'], 
-                     self._pos_weight: blobs['pos_weight']}
+                     self._pos_weights: blobs['pos_weights']}
         
         total_loss, L_reg1, L_reg2, L_cls1, L_cls2, \
         L_cls3, L_H1_E1, L_H1_E2, L_H2_E1, L_H2_E2, \
@@ -555,7 +555,7 @@ class VGG16_RegionDH(VGG16):
                      self._im_info: blobs['im_info'],
                      self._gt_boxes: blobs['gt_boxes'],
                      self._labels: blobs['labels'],
-                     self._pos_weight: blobs['pos_weight']}
+                     self._pos_weights: blobs['pos_weights']}
         
         total_loss, L_reg1, L_reg2, L_cls1, L_cls2, \
         L_cls3, L_H1_E1, L_H1_E2, L_H2_E1, L_H2_E2, \

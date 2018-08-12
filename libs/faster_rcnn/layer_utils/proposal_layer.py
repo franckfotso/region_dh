@@ -63,9 +63,9 @@ def proposal_layer_tf(rpn_cls_prob, rpn_bbox_pred, im_info, mode, _feat_stride, 
     post_nms_topN = cfg.TRAIN_BATCH_DET_RPN_POST_NMS_TOP_N
     nms_thresh = cfg.TRAIN_BATCH_DET_RPN_NMS_THRESH
   else:
-    pre_nms_topN = cfg.TEST_BATCH_DET_RPN_PRE_NMS_TOP_N
-    post_nms_topN = cfg.TEST_BATCH_DET_RPN_POST_NMS_TOP_N
-    nms_thresh = cfg.TEST_BATCH_DET_RPN_NMS_THRESH
+    pre_nms_topN = cfg.TEST_DEFAULT_RPN_PRE_NMS_TOP_N
+    post_nms_topN = cfg.TEST_DEFAULT_RPN_POST_NMS_TOP_N
+    nms_thresh = cfg.TEST_DEFAULT_RPN_NMS_THRESH
 
   # Get the scores and bounding boxes
   scores = rpn_cls_prob[:, :, :, num_anchors:]

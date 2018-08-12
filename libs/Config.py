@@ -128,7 +128,7 @@ class Config(object):
             self.cfg.TRAIN_DEFAULT_MOMENTUM = self.load_param("TRAIN.DEFAULT", "MOMENTUM","float")
             self.cfg.TRAIN_DEFAULT_WEIGHT_DECAY = self.load_param("TRAIN.DEFAULT", "WEIGHT_DECAY","float")
             self.cfg.TRAIN_DEFAULT_GAMMA = self.load_param("TRAIN.DEFAULT", "GAMMA","float")
-            self.cfg.TRAIN_DEFAULT_STEPSIZE = self.load_param("TRAIN.DEFAULT", "STEPSIZE", "list", "int")
+            self.cfg.TRAIN_DEFAULT_STEPSIZE_RATE = self.load_param("TRAIN.DEFAULT", "STEPSIZE_RATE", "int")
             self.cfg.TRAIN_DEFAULT_DOUBLE_BIAS = self.load_param("TRAIN.DEFAULT", "DOUBLE_BIAS","bool")
             self.cfg.TRAIN_DEFAULT_SUMMARY_INTERVAL = self.load_param("TRAIN.DEFAULT", "SUMMARY_INTERVAL","int")
             self.cfg.TRAIN_DEFAULT_DISPLAY = self.load_param("TRAIN.DEFAULT", "DISPLAY","int")
@@ -194,6 +194,7 @@ class Config(object):
             self.cfg.TRAIN_BATCH_DET_BETAS = self.load_param("TRAIN.BATCH.DET", "BETAS", "list","float")
             self.cfg.TRAIN_BATCH_DET_GAMMAS_H1 = self.load_param("TRAIN.BATCH.DET", "GAMMAS_H1", "list","float")
             self.cfg.TRAIN_BATCH_DET_GAMMAS_H2 = self.load_param("TRAIN.BATCH.DET", "GAMMAS_H2", "list","float")
+            self.cfg.TRAIN_BATCH_DET_BOTTOM_RATE = self.load_param("TRAIN.BATCH.DET", "BOTTOM_RATE","float")
      
             ''' 
                 TRAIN.LAYER 

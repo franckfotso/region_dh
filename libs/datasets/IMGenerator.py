@@ -117,8 +117,8 @@ class IMGenerator(object):
         built_im_scales = []
         
         for im_i in range(num_imgs):
-            im_RAW = cv2.imread(images[im_i].pathname)          
-            
+            im_RAW = cv2.imread(images[im_i].pathname)
+                        
             target_size = self.cfg.TRAIN_DEFAULT_SCALES[scale_inds[im_i]]
             PIXEL_MEANS = np.array([[self.cfg.MAIN_DEFAULT_PIXEL_MEANS]])
             im_RAW, im_scale = self.prep_im_for_blob(im_RAW, 

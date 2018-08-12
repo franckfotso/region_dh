@@ -76,6 +76,9 @@ def _proposal_layer(net, rpn_cls_prob, rpn_bbox_pred, name):
             )
         else:
             raise NotImplemented
+            
+        #print("rois.shape: ", rois.shape)
+        #print("rpn_scores.shape: ", rpn_scores.shape)
 
         rois.set_shape([None, 5])
         rpn_scores.set_shape([None, 1])

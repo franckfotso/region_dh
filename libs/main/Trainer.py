@@ -59,4 +59,4 @@ class Trainer(BasicWorker):
                    train_gen, val_gen, tb_dir, output_dir, self.cfg)
             print('Solving...')
             sw.train_model(sess, max_iters)
-            print('done solving')    
+            print('done solving')

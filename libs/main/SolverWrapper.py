@@ -38,9 +38,20 @@ class SolverWrapper(object):
         self.tb_dir = tb_dir
         self.output_dir = output_dir
         self.cfg = cfg
+        self.stepsizes = []
 
     def train_model(self, sess, max_iters):
         """train a model, with snapshots and summaries"""
+        
+        # define stepsizes for learning rate decrease
+        stepsize_rate = self.cfg.TRAIN_DEFAULT_STEPSIZE_RATE
+        
+        for v in range(1, stepsize_rate):
+            _stepsize = int(max_iters*(v/stepsize_rate))+1
+            
+            if _stepsize < max_iters:
+                self.stepsizes.append(_stepsize)
+        #print("stepsizes: ", sorted(self.stepsizes))
         
         # Construct the computation graph
         lr, train_op = self.construct_graph(sess)
@@ -77,7 +88,7 @@ class SolverWrapper(object):
         
         iters_per_epoch = int(len(self.train_gen.images)/_batch_size)+1
         snapshot_iters = iters_per_epoch*self.cfg.TRAIN_DEFAULT_SNAPSHOT_EPOCHS
-        
+               
         assert snapshot_iters < max_iters, \
         "snapshot_iters must be very small than max_iters, got: [{},{}]".format(snapshot_iters, max_iters)
         
@@ -95,7 +106,7 @@ class SolverWrapper(object):
                 blobs_val = self.val_gen.get_next_minibatch()
                 outputs = self.net.train_step(sess, blobs_val, train_op)
                 
-                if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH"]:
+                if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH1", "SSDH2"]:
                     val_acc = outputs["accuracies"]["acc_cls"]
                 elif self.techno in ["Region-DH"]:
                     val_acc = outputs["accuracies"]["im_acc_cls"]
@@ -139,7 +150,7 @@ class SolverWrapper(object):
                 loss_cls     = outputs["losses"]["loss_cls"]
                 acc_cls      = outputs["accuracies"]["acc_cls"]
             
-            elif self.techno in ["SSDH"]:
+            elif self.techno in ["SSDH1", "SSDH2"]:
                 # get classification and encoding outputs
                 loss_E1     = outputs["losses"]["loss_E1"]
                 loss_E2     = outputs["losses"]["loss_E2"]
@@ -164,15 +175,14 @@ class SolverWrapper(object):
                 bbox_acc_cls = outputs["accuracies"]["bbox_acc_cls"]
                 
             else:
-                raise NotImplemented
+                raise NotImplementedError
                 
             total_loss   = outputs["losses"]["total_loss"]            
             
             # Display training information
             if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
                 max_steps = iters_per_epoch
-                #cur_step = iter - int(epoch)*max_steps
-                cur_step = int(iter - epoch*max_steps)
+                cur_step = iter - int(epoch)*max_steps
                 if cur_step <= 0:
                     cur_step = 0                    
                 
@@ -184,7 +194,7 @@ class SolverWrapper(object):
                     print(" >>> loss_cls: {:.6f} \n >>> acc_cls: {:.6f}".\
                       format(loss_cls, acc_cls))
                 
-                elif self.techno in ["SSDH"]:
+                elif self.techno in ["SSDH1", "SSDH2"]:
                     print(" >>> loss_E1: {:.6f} \n >>> loss_E2: {:.6f} \n >>> loss_E3: {:.6f} \n >>> acc_cls: {:.6f}".\
                       format(loss_E1, loss_E2, loss_E3, acc_cls))
                     
@@ -192,10 +202,16 @@ class SolverWrapper(object):
                     print(" >>> triplet_loss: {:.6f}".format(triplet_loss))
                     
                 elif self.techno in ["Region-DH"]:
-                    print(" >>> L_reg1: {:.6f} \n >>> L_reg2: {:.6f} \n >>> L_cls1: {:.6f} \n >>> L_cls2: {:.6f} \n >>> L_cls3: {:.6f} \n >>> L_H1_E1: {:.6f},  L_H1_E2: {:.6f} \n >>> L_H2_E1: {:.6f},  L_H2_E2: {:.6f} \n >>> bbox_acc_cls: {:.6f} >>> im_acc_cls: {:.6f}\n ".format(L_reg1, L_reg2, L_cls1, L_cls2, L_cls3, L_H1_E1, L_H1_E2, L_H2_E1, L_H2_E2, bbox_acc_cls, im_acc_cls))
+                    print(" >>> L_reg1: {:.6f} \n >>> L_reg2: {:.6f}".format(L_reg1, L_reg2))
+                    print(" >>> L_cls1: {:.6f} \n >>> L_cls2: {:.6f} \n >>> L_cls3: {:.6f}".\
+                          format(L_cls1, L_cls2, L_cls3))
+                    print(" >>> L_H1_E1: {:.6f}, L_H1_E2: {:.6f}".format(L_H1_E1, L_H1_E2))
+                    print(" >>> L_H2_E1: {:.6f}, L_H2_E2: {:.6f}".format(L_H2_E1, L_H2_E2))
+                    print(" >>> bbox_acc_cls: {:.6f} >>> im_acc_cls: {:.6f}".format(bbox_acc_cls, im_acc_cls))
                     
                 print(" >>> lr: {:.6f}".format(lr.eval()))                
-                print("max_iters: {} \nsnapshot_iters: {}".format(max_iters, snapshot_iters))
+                print("cur_iter: {} \nmax_iters: {} \nsnapshot_iters: {}".format(iter, max_iters, snapshot_iters))
+                print("stepsizes: ", sorted(self.stepsizes))
                 print("speed: {:.3f}s / iter".format(timer.average_time))
                 print("----------------------------")
     
@@ -207,7 +223,7 @@ class SolverWrapper(object):
                 blobs_val = self.val_gen.get_next_minibatch()
                 outputs = self.net.train_step(sess, blobs_val, train_op)              
                 
-                if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH"]:
+                if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH1", "SSDH2"]:
                     val_acc = outputs["accuracies"]["acc_cls"]
                 elif self.techno in ["Region-DH"]:
                     val_acc = outputs["accuracies"]["im_acc_cls"]
@@ -228,7 +244,7 @@ class SolverWrapper(object):
             blobs_val = self.val_gen.get_next_minibatch()   
             outputs = self.net.train_step(sess, blobs_val, train_op)
            
-            if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH"]:
+            if self.techno in ["FT", "DLBHC", "TLOSS2", "SSDH1", "SSDH2"]:
                 val_acc = outputs["accuracies"]["acc_cls"]
             elif self.techno in ["Region-DH"]:
                 val_acc = outputs["accuracies"]["im_acc_cls"]
@@ -248,7 +264,7 @@ class SolverWrapper(object):
         sfiles.sort(key=os.path.getmtime)
         # Get the snapshot name in TensorFlow
         redfiles = []
-        for stepsize in self.cfg.TRAIN_DEFAULT_STEPSIZE:
+        for stepsize in self.stepsizes:
             redfiles.append(os.path.join(self.output_dir, 
                           self.cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX + '_iter_{:d}.ckpt.meta'.format(stepsize+1)))
         sfiles = [ss.replace('.meta', '') for ss in sfiles if ss not in redfiles]
@@ -288,7 +304,7 @@ class SolverWrapper(object):
         print('Fixed.')
         last_snapshot_iter = 0
         rate = self.cfg.TRAIN_DEFAULT_LEARNING_RATE
-        stepsizes = list(self.cfg.TRAIN_DEFAULT_STEPSIZE)
+        stepsizes = [s for s in self.stepsizes]
     
         return rate, last_snapshot_iter, stepsizes, np_paths, ss_paths
     
@@ -302,7 +318,7 @@ class SolverWrapper(object):
         # Set the learning rate
         rate = self.cfg.TRAIN_DEFAULT_LEARNING_RATE
         stepsizes = []
-        for stepsize in self.cfg.TRAIN_DEFAULT_STEPSIZE:
+        for stepsize in self.stepsizes:
             if last_snapshot_iter > stepsize:
                 rate *= self.cfg.TRAIN_DEFAULT_GAMMA
             else:
@@ -348,25 +364,87 @@ class SolverWrapper(object):
             # Define the loss
             loss = layers['total_loss']
             # Set learning rate and momentum
-            lr = tf.Variable(self.cfg.TRAIN_DEFAULT_LEARNING_RATE, trainable=False)
-            self.optimizer = tf.train.MomentumOptimizer(lr, self.cfg.TRAIN_DEFAULT_MOMENTUM)
+            #lr = tf.Variable(self.cfg.TRAIN_DEFAULT_LEARNING_RATE, trainable=False, name="lr") # if not ckpt
+            lr = tf.Variable(self.cfg.TRAIN_DEFAULT_LEARNING_RATE, trainable=False, name="lr_ft") # if ckpt used
             
-            # Compute the gradients with regard to the loss
-            gvs = self.optimizer.compute_gradients(loss)
-            # Double the gradient of the bias if set
-            if self.cfg.TRAIN_DEFAULT_DOUBLE_BIAS:
-                final_gvs = []
-                with tf.variable_scope('Gradient_Mult') as scope:
-                    for grad, var in gvs:
-                        scale = 1.
-                        if self.cfg.TRAIN_DEFAULT_DOUBLE_BIAS and '/biases:' in var.name:
-                            scale *= 2.
-                        if not np.allclose(scale, 1.0):
-                            grad = tf.multiply(grad, scale)
-                        final_gvs.append((grad, var))
-                train_op = self.optimizer.apply_gradients(final_gvs)
+            top_opt = tf.train.MomentumOptimizer(lr, self.cfg.TRAIN_DEFAULT_MOMENTUM) # normal learning
+            bot_opt = tf.train.MomentumOptimizer(lr*self.cfg.TRAIN_BATCH_DET_BOTTOM_RATE,
+                                              self.cfg.TRAIN_DEFAULT_MOMENTUM) # slow/no learning
+            
+            # Compute the gradients with regard to the loss            
+            # & apply some changes on the gradients
+            
+            if self.cfg.TRAIN_BATCH_DET_BOTTOM_RATE == 1.0:
+                # same learning rate for both top and bottom
+                gvs = top_opt.compute_gradients(loss)
+                train_op = top_opt.apply_gradients(gvs)
             else:
-                train_op = self.optimizer.apply_gradients(gvs)
+                train_vars = tf.trainable_variables()
+                train_names = [v.name for v in train_vars]
+
+                top_names = []
+                if self.techno in ["SSDH1", "Region-DH"]:
+                    # single fc_emb, multi-cfc
+                    if self.techno == "Region-DH":
+                        top_names.append(self.net._scope+'/embs_H1/weights:0')
+                        top_names.append(self.net._scope+'/embs_H1/biases:0')
+                        top_names.append(self.net._scope+'/embs_H2/weights:0')
+                        top_names.append(self.net._scope+'/embs_H2/biases:0')
+                        top_names.append(self.net._scope+'/bbox_score/weights:0')
+                        top_names.append(self.net._scope+'/bbox_score/biases:0')
+                    else:
+                        top_names.append(self.net._scope+'/fc_emb/weights:0')
+                        top_names.append(self.net._scope+'/fc_emb/biases:0')
+
+                    for _id in range(self.dataset.num_cls-1):
+                        top_names.append(self.net._scope+'/cls_score'+str(_id)+'/weights:0')
+                        top_names.append(self.net._scope+'/cls_score'+str(_id)+'/biases:0')
+
+                elif self.techno in ["SSDH2"]:
+                    # multiple fc_emb, multi-cfc
+                    
+                    if self.techno == "Region-DH":
+                        top_names.append(self.net._scope+'/embs_H1/weights:0')
+                        top_names.append(self.net._scope+'/embs_H1/biases:0')
+                        top_names.append(self.net._scope+'/bbox_score/weights:0')
+                        top_names.append(self.net._scope+'/bbox_score/biases:0')
+                        
+                        for _id in range(self.dataset.num_cls-1):
+                            top_names.append(self.net._scope+'/embs_H2'+str(_id)+'/weights:0')
+                            top_names.append(self.net._scope+'/embs_H2'+str(_id)+'/biases:0')
+                    else:
+                        for _id in range(self.dataset.num_cls-1):
+                            top_names.append(self.net._scope+'/fc_emb'+str(_id)+'/weights:0')
+                            top_names.append(self.net._scope+'/fc_emb'+str(_id)+'/biases:0')
+                            
+                    for _id in range(self.dataset.num_cls-1):        
+                        top_names.append(self.net._scope+'/cls_score'+str(_id)+'/weights:0')
+                        top_names.append(self.net._scope+'/cls_score'+str(_id)+'/biases:0') 
+                else:
+                    raise NotImplementedError
+
+                bottom_names = [v.name for v in train_vars if v.name not in top_names]
+
+                print("-------------------------------------------")
+                for name in top_names:
+                    print("[INFO] top_layer: ", name)
+                print("-------------------------------------------")
+                for name in bottom_names:
+                    print("[INFO] bot_layer: ", name)
+                print("-------------------------------------------")
+                print("[INFO] BOTTOM_RATE: ", self.cfg.TRAIN_BATCH_DET_BOTTOM_RATE)
+                #raise NotImplementedError
+                
+                bottom_vars = [v for v in train_vars if v.name in bottom_names]
+                top_vars = [v for v in train_vars if v.name in top_names]
+
+                gvs = tf.gradients(loss, bottom_vars+top_vars)
+                gvs_bot = gvs[:len(bottom_vars)]
+                gvs_top = gvs[len(bottom_vars):] 
+
+                top_op = top_opt.apply_gradients(zip(gvs_top, top_vars))
+                bot_op = bot_opt.apply_gradients(zip(gvs_bot, bottom_vars))
+                train_op = tf.group(top_op, bot_op)            
             
             # We will handle the snapshots ourselves
             self.saver = tf.train.Saver(max_to_keep=100000)

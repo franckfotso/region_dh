@@ -90,47 +90,21 @@ class ROIGenerator(object):
         
         im_info = np.array([im_blob.shape[1], im_blob.shape[2], im_scales[0]], dtype=np.float32)
         
-        # build pos_weights for class-balancing
-        pos_weights = np.ones((label_blob.shape[0], label_blob.shape[1]))       
+        # positive weights over the batch only
+        batch_weights = np.ones((label_blob.shape[0], label_blob.shape[1]))       
+           
+        for cls_id in range(label_blob.shape[1]):
+            pos_ids = np.where(label_blob[:, cls_id] == 1)[-1]
+            neg_ids = np.where(label_blob[:, cls_id] == 0)[-1]
+            pos_ratio = len(pos_ids)/label_blob.shape[0]
+            batch_weights[pos_ids, cls_id] = pos_ratio
+            batch_weights[neg_ids, cls_id] = 1 - pos_ratio
         
-        #"""       
-        for _id in range(label_blob.shape[0]):
-            gt_inds = np.where(images[_id].rois["gt"]['gt_classes'] != 0)[0]
-            
-            """ single pos_weight, try 1
-            pos_ratio = np.sum(label_blob[_id])/label_blob.shape[1]
-            pos_weights[_id] = pos_weights[_id]*pos_ratio
-            #"""
-            
-            #""" single pos_weight, try 2
-            pos_ratio = np.sum(label_blob[_id])/label_blob.shape[1]
-            pos_ratio = 1-pos_ratio
-            pos_weights[_id] = pos_weights[_id]*pos_ratio
-            #"""
-            
-            """ single pos_weight, try 3
-            pos_ratio = np.sum(label_blob[_id])/(label_blob.shape[1]-np.sum(label_blob[_id]))
-            pos_weights[_id] = pos_weights[_id]*pos_ratio
-            #"""
-                        
-            """ positive weights from LP,  try 4
-            pos_ids = np.where(label_blob[_id] == 1)[-1]
-            neg_ids = np.where(label_blob[_id] == 0)[-1]
-            pos_ratio = np.sum(label_blob[_id])/label_blob.shape[1]
-            pos_weights[pos_ids] = pos_ratio
-            pos_weights[neg_ids] = 1 - pos_ratio
-            #"""
-            
-            """ positive weights from LP,  try 5
-            pos_ids = np.where(label_blob[_id] == 1)[-1]
-            neg_ids = np.where(label_blob[_id] == 0)[-1]
-            pos_ratio = np.sum(label_blob[_id])/label_blob.shape[1]
-            pos_weights[pos_ids] = 1 - pos_ratio
-            pos_weights[neg_ids] = pos_ratio
-            #"""
-        #"""
+        pos_weights = np.ones((label_blob.shape[0], label_blob.shape[1])) # try 0, weights
+        #pos_weights = batch_weights # try 1
+        #pos_weights = 1-pos_weights # try 2
         
-        # positive weights from all samples # try 6
+        # positive weights over all the samples # try 3
         """
         if self.pos_weights != None:
             pos_weights = self.pos_weights

@@ -10,20 +10,21 @@ from extractor.feat_tools import *
 
 class DeepExtractor:
 
-    def __init__(self, techno, arch, num_cls, num_bits, weights, cfg):
+    def __init__(self, techno, arch, num_cls, num_bits, weights, multilabel, cfg):
         self.techno = techno
         self.num_bits = num_bits
         self.weights = weights
+        self.multilabel = multilabel
         self.cfg = cfg
         
-        sess, net = tf_init_feat(weights, arch, num_cls, num_bits, techno, cfg) 
+        sess, net = tf_init_feat(weights, arch, num_cls, num_bits, techno, multilabel, cfg) 
         self.sess = sess
         self.net = net
 
-    def extract(self, im_pns):        
+    def extract(self, images):        
         binary_codes = None
         if self.net != None:
-            binary_codes, deep_features = tf_batch_feat(im_pns,
+            binary_codes, deep_features = tf_batch_feat(images,
                                                        self.sess,
                                                        self.net,
                                                        self.techno,

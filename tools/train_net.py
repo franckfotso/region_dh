@@ -27,16 +27,13 @@ from datasets.CIFAR10 import CIFAR10
 from main.Trainer import Trainer
 from nets.VGG16_FT import VGG16_FT
 from nets.VGG16_DLBHC import VGG16_DLBHC
-from nets.VGG16_SSDH import VGG16_SSDH
+from nets.VGG16_SSDH1 import VGG16_SSDH1
+from nets.VGG16_SSDH2 import VGG16_SSDH2
 from nets.VGG16_RegionDH import VGG16_RegionDH
 
 def parse_args():
     # construct the argument parse and parse the arguments
     ap = argparse.ArgumentParser()
-    """
-    ap.add_argument("--gpu_id", dest="gpu_id", default=0, 
-                    help="id of GPU device", type=int)
-    """
     ap.add_argument("--dataset", dest="dataset", required=True, 
                     help="dataset name to use", type=str)
     ap.add_argument('--gt_set', dest='gt_set',
@@ -47,10 +44,8 @@ def parse_args():
                     default='SSDH', type=str)
     ap.add_argument("--net", dest="net", required=True, 
                     help="backbone network", type=str)
-    """
-    ap.add_argument("--iters", dest="iters", default=50000,
-                    help="number of iterations for training", type=int)
-    """
+    ap.add_argument("--weights", dest="weights", default="",
+                    help="path to checkpoint model file")
     ap.add_argument("--epochs", dest="epochs", required=True, default=20,
                     help="number of epochs for the training", type=int)
     ap.add_argument("--num_bits", dest="num_bits", default=48,
@@ -125,7 +120,7 @@ if __name__ == '__main__':
         os.makedirs(tb_dir)
     
     net = None
-    weights = None # pretrained weights
+    weights = args["weights"] # pretrained weights or checkpoint
     
     if args['net'] == "VGG16":
         if techno == "FT":
@@ -134,13 +129,19 @@ if __name__ == '__main__':
         elif techno == "DLBHC":
             net = VGG16_DLBHC(cfg, args["num_bits"])
             
-        elif techno == "SSDH":
-            net = VGG16_SSDH(cfg, args["num_bits"])
+        elif techno == "SSDH1":
+            net = VGG16_SSDH1(cfg, args["num_bits"])
+            
+        elif techno == "SSDH2":
+            net = VGG16_SSDH2(cfg, args["num_bits"])
             
         elif techno == "Region-DH":
+            # slow down display
+            cfg.TRAIN_DEFAULT_DISPLAY = 20 
             net = VGG16_RegionDH(cfg, args["num_bits"])
             
-        weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"
+        if args["weights"] == "":
+            weights = "models/pretrained/imagenet_weights/vgg_16.ckpt"
         
     assert net != None, \
     "[ERROR] invalid network provided. Found: {}".format(args["net"])
