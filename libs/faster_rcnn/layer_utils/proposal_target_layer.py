@@ -16,14 +16,14 @@ from utils.cython_bbox import bbox_overlaps
 
 from Config import Config
 
-def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes):
+def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes, config_pn):
   """
   Assign object detection proposals to ground-truth targets. Produces proposal
   classification labels and bounding-box regression targets.
   """
   
   # setup & load configs
-  _C = Config(config_pn="config/config.ini")
+  _C = Config(config_pn=config_pn.decode())
   cfg = _C.cfg
 
   # Proposal ROIs (0, x1, y1, x2, y2) coming from RPN

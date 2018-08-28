@@ -16,12 +16,14 @@ from bbox_transform import bbox_transform
 
 from Config import Config
 
-def anchor_target_layer(rpn_cls_score, gt_boxes, im_info, _feat_stride, all_anchors, num_anchors):
+def anchor_target_layer(rpn_cls_score, gt_boxes, im_info, _feat_stride, all_anchors, num_anchors, config_pn):
   """Same as the anchor target layer in original Fast/er RCNN """
 
   # setup & load configs
-  _C = Config(config_pn="config/config.ini")
+  _C = Config(config_pn=config_pn.decode())
   cfg = _C.cfg
+    
+  #print("config_pn: ", config_pn.decode())
 
   A = num_anchors
   total_anchors = all_anchors.shape[0]

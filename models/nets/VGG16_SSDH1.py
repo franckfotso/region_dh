@@ -17,9 +17,7 @@ from tensorflow.contrib.slim import losses
 from tensorflow.contrib.slim import arg_scope
 
 from nets.VGG16 import VGG16
-
 from faster_rcnn import layers
-from sklearn.svm import SVC
 
 """ SSDH implementation: single fc_emb, multiple binary classifiers"""
 
@@ -162,7 +160,8 @@ class VGG16_SSDH1(VGG16):
                           trainable=is_training,
                           activation_fn=tf.nn.sigmoid, scope=scope)
                     
-        return fc_emb    
+        return fc_emb
+    
     
     def _single_image_classification(self, net, is_training):
         # net.layers[-1]: fc hash
@@ -316,7 +315,6 @@ class VGG16_SSDH1(VGG16):
                 print("labels.shape: ", labels.shape)
                 print("cls_pred.shape: ", cls_pred.shape)
                 acc_cls, _, _ = layers._precision_recall_score(labels, cls_pred, "acc_cls")
-                                
             else:
                 acc_cls = tf.contrib.metrics.accuracy(predictions=cls_preds, labels=labels, name="acc_cls")
             

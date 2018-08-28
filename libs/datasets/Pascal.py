@@ -222,7 +222,7 @@ class Pascal(Dataset):
         images = self.filter_images(images)       
         
         """ append horizontal flipped  images """        
-        if self.cfg.TRAIN_DEFAULT_USE_FLIPPED and gt_set != 'test':
+        if self.cfg.TRAIN_DEFAULT_USE_FLIPPED and gt_set != 'test' and gt_set != 'val':
             print ('[INFO] append horizontal flipped  gt images: {}'.format(self.name))
             print ('gt > bef. flipped, len(images): {}'.format(len(images)))
             images = self.append_flipped_images(images=images, src='gt', num_proc=num_proc)            

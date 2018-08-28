@@ -12,14 +12,13 @@ from easydict import EasyDict as edict
 
 class Config(object):
     
-    def __init__(self, 
-                 config_pn="../config/config.ini",
-                 extras=None):
+    def __init__(self, config_pn, extras=None):
         self._parser = cp.RawConfigParser()
         self._parser.read(config_pn)
         
         self._extras = extras
         self._cfg = edict()
+        self._cfg.FILE = config_pn
         
         self.load_config()
 

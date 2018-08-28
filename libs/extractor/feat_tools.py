@@ -30,7 +30,7 @@ def tf_init_feat(weights, net_name, num_cls, num_bits, techno, multilabel, cfg):
     net = None    
     if net_name == "VGG16":
         if techno == "DLBHC":
-            net = VGG16_DLBHC(cfg, num_bits)
+            net = VGG16_DLBHC(cfg, num_bits, multilabel)
             net.create_architecture('TEST', num_cls, tag='default')
             
         elif techno == "FT":

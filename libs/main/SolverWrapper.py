@@ -110,7 +110,7 @@ class SolverWrapper(object):
                     val_acc = outputs["accuracies"]["acc_cls"]
                 elif self.techno in ["Region-DH"]:
                     val_acc = outputs["accuracies"]["im_acc_cls"]
-                
+                                
                 #self.snapshot(sess, iter)
                 self.snapshot(sess, iter, val_acc)
                 
@@ -212,12 +212,14 @@ class SolverWrapper(object):
                 print(" >>> lr: {:.6f}".format(lr.eval()))                
                 print("cur_iter: {} \nmax_iters: {} \nsnapshot_iters: {}".format(iter, max_iters, snapshot_iters))
                 print("stepsizes: ", sorted(self.stepsizes))
+                print("config: ", self.cfg.FILE)
                 print("speed: {:.3f}s / iter".format(timer.average_time))
                 print("----------------------------")
     
             # Snapshotting       
             #if iter % self.cfg.TRAIN_DEFAULT_SNAPSHOT_ITERS == 0: snapshot_iters
-            if iter % snapshot_iters == 0:
+            #if iter % snapshot_iters == 0:
+            if iter % snapshot_iters == 0 and iter != (next_stepsize + 1):
                 print("Snapshotting iter. {}...".format(iter))
                 
                 blobs_val = self.val_gen.get_next_minibatch()
@@ -383,9 +385,13 @@ class SolverWrapper(object):
                 train_names = [v.name for v in train_vars]
 
                 top_names = []
-                if self.techno in ["SSDH1", "Region-DH"]:
+                if self.techno in ["SSDH1", "DLBHC","Region-DH"]:
                     # single fc_emb, multi-cfc
                     if self.techno == "Region-DH":
+                        top_names.append(self.net._scope+'/fc6/weights:0')
+                        top_names.append(self.net._scope+'/fc6/biases:0')
+                        top_names.append(self.net._scope+'/fc7/weights:0')
+                        top_names.append(self.net._scope+'/fc7/biases:0')
                         top_names.append(self.net._scope+'/embs_H1/weights:0')
                         top_names.append(self.net._scope+'/embs_H1/biases:0')
                         top_names.append(self.net._scope+'/embs_H2/weights:0')

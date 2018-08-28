@@ -9,7 +9,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
-#from model.config import cfg
+
 from bbox_transform import bbox_transform_inv, clip_boxes, bbox_transform_inv_tf, clip_boxes_tf
 from nms_wrapper import nms
 

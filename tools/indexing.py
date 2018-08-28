@@ -39,6 +39,8 @@ def parse_args():
                         help="number of bits for the hashing layer", type=int)
     ap.add_argument("--deep_db", required=True,
                     help="path for the deepfeatures db")
+    ap.add_argument("--config", dest="config", required=True, type=str,
+                    help="config file for the techno")
     args = vars(ap.parse_args())
     
     return args
@@ -51,7 +53,7 @@ if __name__ == '__main__':
     print(args)
     
     # setup & load configs
-    _C = Config(config_pn="config/config.ini")
+    _C = Config(config_pn=args['config'])
     cfg = _C.cfg
     
     print('Using config:')
@@ -84,23 +86,14 @@ if __name__ == '__main__':
     print ('[INFO] dataset.val: {}'.format(dataset.sets["val"]["num_items"]))
     
     multilabel = False
-    if gt_set == "train_val":
-        if dataset.name in ds_pascal:
-            images, _ = dataset.load_gt_rois(gt_set="trainval")
-            # remove flipped images
-            images = [image for image in images if not image.rois["gt"]['flipped']]
-            multilabel  = True
-            
-        elif dataset.name in ["cifar10"]:
-            (images, _), _ = dataset.load_images()           
-           
-    elif gt_set == "test":
-        if dataset.name in ds_pascal:
-            images, _ = dataset.load_gt_rois(gt_set="test")
-            multilabel  = True
-            
-        elif dataset.name in ["cifar10"]:
-            (_, images), _ = dataset.load_images() 
+    if dataset.name in ds_pascal:
+        images, _ = dataset.load_gt_rois(gt_set=gt_set)
+        # remove flipped images
+        images = [image for image in images if not image.rois["gt"]['flipped']]
+        multilabel  = True
+
+    elif dataset.name in ["cifar10"]:
+        (images, _), _ = dataset.load_images()  
         
     print ('[INFO] {}, images.num: {}'.format(gt_set, len(images))) 
     

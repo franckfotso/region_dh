@@ -27,6 +27,9 @@ def parse_args():
     ap = argparse.ArgumentParser()  
     ap.add_argument("--dataset", dest="dataset", required=True, 
                     help="dataset name to use", type=str)
+    ap.add_argument('--gt_set', dest='gt_set',
+                    help='gt set use to list data', required=True,
+                    default='train', type=str)
     ap.add_argument("--train_db", dest='train_db', required=True,
                     help="path for the train deepfeatures db")
     ap.add_argument("--val_db", dest='val_db', required=True,
@@ -35,6 +38,8 @@ def parse_args():
                 help="encoding of features to evaluate")
     ap.add_argument("--num_rlts", dest="num_rlts", default=500, 
                 help="top-k results", type=int)
+    ap.add_argument("--config", dest="config", required=True, type=str,
+                    help="config file for the techno")
     args = vars(ap.parse_args())
     
     return args
@@ -47,7 +52,9 @@ def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg,
     
     # index of the k positions
     m = np.array([ x+1 for x in range(top_k)])
-    AP = np.zeros((num_qrys))    
+    AP = np.zeros((num_qrys))
+    w_AP = np.zeros((num_qrys))
+    ACG = np.zeros((num_qrys))
     num_TP = np.zeros((len(m)))
     
     processes = []
@@ -75,20 +82,25 @@ def comp_precision(val_labels, val_codes, train_labels, train_codes, top_k, cfg,
 
     # collect results
     for proc_id in range(num_proc):
-        _num_TP, _ids, _AP = queues[proc_id].get()
+        _num_TP, _ids, _AP, _w_AP, _ACG = queues[proc_id].get()
         
         num_TP  += _num_TP
         for _i, _id in enumerate(_ids):
             AP[_id] = _AP[_i]
-                   
-    # MAP
-    MAP = np.mean(AP)
+            w_AP[_id] = _w_AP[_i]
+            ACG[_id] = _ACG[_i]
+    
+    MAP = np.mean(AP) # MAP
+    w_MAP = np.mean(w_AP) # w_MAP
+    ACG = np.mean(ACG) # ACG@k
     print ("[INFO] MAP: {:.6}".format(MAP))
+    print ("[INFO] w_MAP: {:.6}".format(w_MAP))
+    print ("[INFO] ACG: {:.6}".format(ACG))
     
     # precision at k results
     prec_k = num_TP/(m*num_qrys)
     
-    return prec_k, MAP
+    return prec_k, MAP, w_MAP, ACG
 
 
 def _comp_precision(l_start, l_end, val_labels, val_codes, 
@@ -99,6 +111,8 @@ def _comp_precision(l_start, l_end, val_labels, val_codes,
     m = np.array([ x+1 for x in range(top_k)])
     _num_TP = np.zeros((len(m)))
     _AP = []
+    _w_AP = []
+    _ACG = []
     _ids = []
 
     for i in range(l_start, l_end):
@@ -141,14 +155,15 @@ def _comp_precision(l_start, l_end, val_labels, val_codes,
 
         # similarity (0, 1) observed for each j-th position
         r = np.zeros((len(qry_rlts))) # r(j)
+        ACG = np.zeros((len(qry_rlts)))
         N_pos = 0 # number of relevant images over all results
 
         for j, (dist, label, idx) in enumerate(qry_rlts):
             if multilabel:
                 for id_cls in range(len(label)):
                     if qry_label[id_cls] == 1 and label[id_cls] == qry_label[id_cls]:
-                        #r[j] += 1 # number of shared label. multi-label
                         r[j] = 1
+                        ACG[j] += 1
                 N_pos += r[j]
             else:
                 if qry_label == label:
@@ -157,20 +172,26 @@ def _comp_precision(l_start, l_end, val_labels, val_codes,
 
         # number of relevant images within the top j images
         P_at_j = np.cumsum(r)/m
+        ACG_at_j = np.cumsum(ACG)/m
 
         # AP for each query
         if N_pos == 0:
-            AP = 0.0            
+            AP = 0.0
+            w_AP = 0.0
         else:
             AP = np.sum(P_at_j*r)/N_pos
+            w_AP = np.sum(ACG_at_j*r)/N_pos
             
         _AP.append(AP)
+        _w_AP.append(w_AP)
+        _ACG.append(ACG_at_j[-1])
         _ids.append(i)
-        print ("[INFO] Processing query {}/{}, AP: {:.6}".format(i+1, len(val_codes), AP))
+        print ("[INFO] Processing query {}/{}, AP: {:.6}, w_AP: {:.6}, ACG: {:.6}".\
+               format(i+1, len(val_codes), AP, w_AP, ACG_at_j[-1]))
 
         _num_TP = _num_TP + np.cumsum(r)
 
-    queue.put([_num_TP, _ids, _AP])
+    queue.put([_num_TP, _ids, _AP, _w_AP, _ACG])
         
         
 if __name__ == '__main__':
@@ -180,8 +201,8 @@ if __name__ == '__main__':
     print(args)
     
     # setup & load configs
-    _C = Config(config_pn="config/config.ini")
-    cfg = _C.cfg    
+    _C = Config(config_pn=args['config'])
+    cfg = _C.cfg 
     
     dataset = None
     ds_pascal = ["voc_2007", "voc_2012"]
@@ -209,11 +230,12 @@ if __name__ == '__main__':
     multilabel = False
     if dataset.name in ds_pascal:
         # TODO: get also labels
-        train_images, _ = dataset.load_gt_rois(gt_set="trainval")
+        train_set, val_set = args["gt_set"].split("_")
+        train_images, _ = dataset.load_gt_rois(gt_set=train_set)
         train_images = [image for image in train_images if not image.rois["gt"]['flipped']]
         train_labels = [image.rois["gt"]["labels"] for image in train_images]
         
-        val_images, _ = dataset.load_gt_rois(gt_set="test")
+        val_images, _ = dataset.load_gt_rois(gt_set=val_set)
         val_labels = [image.rois["gt"]["labels"] for image in val_images]
         multilabel = True
         
@@ -240,6 +262,8 @@ if __name__ == '__main__':
         
     train_codes = np.array(train_codes)
     val_codes = np.array(val_codes)
+    #print("len(val_codes): ", len(val_codes))
+    #print("len(val_labels): ", len(val_labels))
     #print("len(train_codes): ", len(train_codes))
     #print("len(train_labels): ", len(train_labels))
     #raise NotImplementedError
@@ -249,7 +273,7 @@ if __name__ == '__main__':
     
     now = time.time()
     #prec_k, MAP  = comp_precision(val_labels[:100], val_codes[:100], 
-    prec_k, MAP  = comp_precision(val_labels, val_codes, 
+    prec_k, MAP, w_MAP, ACG  = comp_precision(val_labels, val_codes, 
                                   train_labels, train_codes, 
                                   args["num_rlts"], cfg, args["encoding"],
                                   dataset=dataset, multilabel=multilabel)
@@ -275,14 +299,14 @@ if __name__ == '__main__':
             writer.writerow({'position': i+1, 'precision': prec})     
             
     with open(eval_pn, 'w') as csvfile:
-        fieldnames = ['queries', 'targets', 'encoding', 'mAP']
+        fieldnames = ['queries', 'targets', 'encoding', 'mAP', 'w_mAP', 'ACG']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
               
         writer.writerow({'queries': len(val_labels),
                          'targets': len(train_labels), 
                          'encoding': args["encoding"], 
-                         'mAP': MAP})  
+                         'mAP': MAP, "w_mAP": w_MAP, "ACG": ACG})
     
   
         

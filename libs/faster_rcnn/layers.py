@@ -43,24 +43,6 @@ def _softmax_layer(bottom, name):
         return tf.reshape(reshaped_score, input_shape)
     return tf.nn.softmax(bottom, name=name)    
 
-"""
-def proposal_top_layer(net, rpn_cls_prob, rpn_bbox_pred, name):
-    with tf.variable_scope(name) as scope:
-        if net.cfg.TRAIN_DEFAULT_USE_E2E_TF:
-            rois, rpn_scores = proposal_top_layer_tf(
-              rpn_cls_prob,
-              rpn_bbox_pred,
-              net._im_info,
-              net._feat_stride,
-              net._anchors,
-              net._num_anchors
-            )
-        else:
-            raise NotImplemented
-
-    return rois, rpn_scores
-"""
-
 def _proposal_layer(net, rpn_cls_prob, rpn_bbox_pred, name):
     with tf.variable_scope(name) as scope:
         if net.cfg.TRAIN_DEFAULT_USE_E2E_TF:
@@ -156,7 +138,8 @@ def _anchor_target_layer(net, rpn_cls_score, name):
     with tf.variable_scope(name) as scope:
         rpn_labels, rpn_bbox_targets, rpn_bbox_inside_weights, \
         rpn_bbox_outside_weights = tf.py_func(anchor_target_layer,
-        [rpn_cls_score, net._gt_boxes, net._im_info, net._feat_stride, net._anchors, net._num_anchors],
+        [rpn_cls_score, net._gt_boxes, net._im_info, net._feat_stride, \
+         net._anchors, net._num_anchors, net.cfg.FILE],
         [tf.float32, tf.float32, tf.float32, tf.float32], name="anchor_target")
 
         rpn_labels.set_shape([1, 1, None, None])
@@ -179,7 +162,7 @@ def _proposal_target_layer(net, rois, roi_scores, name):
     with tf.variable_scope(name) as scope:
         rois, roi_scores, labels, bbox_targets, \
         bbox_inside_weights, bbox_outside_weights = tf.py_func(proposal_target_layer,
-        [rois, roi_scores, net._gt_boxes, net._num_classes],
+        [rois, roi_scores, net._gt_boxes, net._num_classes, net.cfg.FILE],
         [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32], name="proposal_target")
 
         rois.set_shape([net.cfg.TRAIN_BATCH_DET_BATCH_SIZE, 5])

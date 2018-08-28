@@ -162,7 +162,8 @@ class VGG16_RegionDH(VGG16):
                         
             # cross-proposal fusion => instance-aware feature (iaf): c x b    
             # we exclude the bg class [1:] to emphasize the fg interest
-            ia_feat = tf.tensordot(tf.transpose(bbox_prob)[1:], bbox_feat, axes=1, name="ia_feat")
+            #ia_feat = tf.tensordot(tf.transpose(bbox_prob)[1:], bbox_feat, axes=1, name="ia_feat")
+            ia_feat = tf.tensordot(tf.transpose(bbox_prob)[1:], embs_H1, axes=1, name="ia_feat")
             print("ia_feat.shape: ", ia_feat.shape)
             ia_feat = tf.reshape(ia_feat, [1, -1])
             print("ia_feat.shape: ", ia_feat.shape)

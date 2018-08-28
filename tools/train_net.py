@@ -54,6 +54,8 @@ def parse_args():
                     help="randomize (do not use a fixed seed)", type=bool)
     ap.add_argument("--verbose", dest="verbose", default=False,
                     help="verbosity level", type=bool)
+    ap.add_argument("--config", dest="config", required=True, type=str,
+                    help="config file for the techno")
     args = vars(ap.parse_args())
     
     return args
@@ -65,10 +67,9 @@ if __name__ == '__main__':
     print(args)
     
     # setup & load configs
-    _C = Config(config_pn="config/config.ini")
+    _C = Config(config_pn=args['config'])
     cfg = _C.cfg
     
-    #cfg.MAIN_DEFAULT_GPU_ID = args['gpu_id']
     cfg.TRAIN_DEFAULT_SNAPSHOT_PREFIX = args['net']+"_"+args['techno']
     
     print('Using config:')
@@ -100,10 +101,11 @@ if __name__ == '__main__':
     print ('[INFO] dataset.test: {}'.format(dataset.sets["test"]["num_items"]))
     print ('[INFO] dataset.val: {}'.format(dataset.sets["val"]["num_items"]))
     
-    if gt_set == "train_val":
+    if gt_set in ["train_val", "train_test", "trainval_test"]:
         if dataset.name in ds_pascal:
-            train_images, pos_weights = dataset.load_gt_rois(gt_set="trainval")
-            val_images, _ = dataset.load_gt_rois(gt_set="test")
+            train_set, val_set = gt_set.split("_")
+            train_images, pos_weights = dataset.load_gt_rois(gt_set=train_set)
+            val_images, _ = dataset.load_gt_rois(gt_set=val_set)
             
         elif dataset.name in ["cifar10", "cifar10_m"]:
             (train_images, val_images), _ = dataset.load_images()

@@ -47,7 +47,9 @@ class Rendering:
 
         # check to see if the result should be highlighted
         if highlight:
-            cv2.rectangle(self.view, (startX + 3, startY + 3), (endX - 3, endY - 3), (255, 0, 0), 4)
+            cv2.rectangle(self.view, (startX + 3, startY + 3), (endX - 3, endY - 3), (0, 255, 0), 2)
+        else:
+            cv2.rectangle(self.view, (startX + 3, startY + 3), (endX - 3, endY - 3), (255, 0, 0), 2)
 
         # increment the column counter and image counter
         self.col += 1
