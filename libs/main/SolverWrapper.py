@@ -177,7 +177,7 @@ class SolverWrapper(object):
             else:
                 raise NotImplementedError
                 
-            total_loss   = outputs["losses"]["total_loss"]            
+            total_loss   = outputs["losses"]["total_loss"]          
             
             # Display training information
             if iter % (self.cfg.TRAIN_DEFAULT_DISPLAY) == 0:
